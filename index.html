@@ -3,168 +3,147 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dragon Ball Fighting Game</title>
+<title>Dokkan-Style Game</title>
 <style>
   body {
+    font-family: Arial, sans-serif;
     background: url('https://i.imgur.com/0Z7vX3j.jpg') no-repeat center center fixed;
     background-size: cover;
-    font-family: Arial, sans-serif;
-    text-align: center;
     color: white;
+    text-align: center;
   }
   #game {
-    position: relative;
-    width: 800px;
-    height: 400px;
     margin: 50px auto;
-    border: 2px solid white;
-    background: rgba(0,0,0,0.5);
+    width: 360px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(6, 50px);
+    grid-gap: 5px;
+    margin-bottom: 20px;
+  }
+  .orb {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 20px;
+    user-select: none;
+  }
+  .ki-bar {
+    width: 360px;
+    height: 30px;
+    background: gray;
+    margin: 10px auto;
+    border-radius: 5px;
     overflow: hidden;
   }
-  .fighter {
-    position: absolute;
-    bottom: 0;
-    width: 100px;
-    height: 150px;
-    background-size: contain;
-    background-repeat: no-repeat;
+  .ki-fill {
+    height: 100%;
+    width: 0%;
+    background: yellow;
+    transition: width 0.3s;
   }
-  #fighter1 { left: 50px; background-image: url('https://i.imgur.com/KkZxUqY.png'); }
-  #fighter2 { right: 50px; background-image: url('https://i.imgur.com/7y5kF0S.png'); transform: scaleX(-1); }
-  .health-bar {
-    position: absolute;
-    top: 10px;
-    width: 300px;
-    height: 20px;
+  .hp-bar {
+    width: 360px;
+    height: 30px;
     background: red;
+    margin: 10px auto;
+    border-radius: 5px;
+    overflow: hidden;
   }
-  #health1 { left: 10px; }
-  #health2 { right: 10px; }
-  .projectile {
-    position: absolute;
-    border-radius: 50%;
-    display: none;
+  .hp-fill {
+    height: 100%;
+    width: 100%;
+    background: green;
+    transition: width 0.3s;
   }
-  .ki { width: 20px; height: 20px; background: yellow; }
-  .super { width: 40px; height: 40px; background: orange; }
+  button {
+    padding: 10px 20px;
+    font-size: 18px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
-<h1>Dragon Ball Fighting Game</h1>
-<div id="game">
-  <div id="fighter1" class="fighter"></div>
-  <div id="fighter2" class="fighter"></div>
-  <div id="health1" class="health-bar"></div>
-  <div id="health2" class="health-bar"></div>
-  <div id="ki1" class="projectile ki"></div>
-  <div id="ki2" class="projectile ki"></div>
-  <div id="super1" class="projectile super"></div>
-  <div id="super2" class="projectile super"></div>
+
+<h1>Dokkan-Style Game</h1>
+
+<div class="hp-bar">
+  <div id="enemyHp" class="hp-fill"></div>
 </div>
 
+<div id="game">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="ki-bar">
+  <div id="kiFill" class="ki-fill"></div>
+</div>
+
+<button id="superAttack" disabled>SUPER ATTACK!</button>
+
 <script>
-const game = document.getElementById('game');
-const fighter1 = document.getElementById('fighter1');
-const fighter2 = document.getElementById('fighter2');
-const health1Bar = document.getElementById('health1');
-const health2Bar = document.getElementById('health2');
-const ki1 = document.getElementById('ki1');
-const ki2 = document.getElementById('ki2');
-const super1 = document.getElementById('super1');
-const super2 = document.getElementById('super2');
+const colors = ['red','blue','yellow','green','purple'];
+let ki = 0;
+let maxKi = 100;
+let enemyHp = 100;
 
-let pos1 = 50;
-let pos2 = 650;
-let health1 = 100;
-let health2 = 100;
+const gridEl = document.getElementById('grid');
+const kiFill = document.getElementById('kiFill');
+const enemyHpFill = document.getElementById('enemyHp');
+const superBtn = document.getElementById('superAttack');
 
-const fighterWidth = 100;
-const fighterHeight = 150;
-const gameWidth = 800;
+// Initialize grid
+const gridSize = 36;
+let grid = [];
+for(let i=0;i<gridSize;i++){
+  const color = colors[Math.floor(Math.random()*colors.length)];
+  grid.push(color);
+}
+renderGrid();
 
-const projectiles = [];
-
-function updateFighters() {
-  fighter1.style.left = pos1 + 'px';
-  fighter2.style.left = pos2 + 'px';
+function renderGrid(){
+  gridEl.innerHTML = '';
+  grid.forEach((color,i)=>{
+    const orb = document.createElement('div');
+    orb.className='orb';
+    orb.style.background=color;
+    orb.textContent='';
+    orb.onclick=()=>collectOrb(i);
+    gridEl.appendChild(orb);
+  });
 }
 
-function createProjectile(type, x, y, speed, target, damage) {
-  const el = type === 'ki' ? (target==='fighter2'?ki1:ki2) : (target==='fighter2'?super1:super2);
-  el.style.display = 'block';
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  projectiles.push({el, speed, target, damage, type});
+function collectOrb(index){
+  const color = grid[index];
+  // Each orb gives random ki points
+  const kiGain = Math.floor(Math.random()*15)+5;
+  ki += kiGain;
+  if(ki > maxKi) ki = maxKi;
+  kiFill.style.width = (ki/maxKi*100)+'%';
+  // Remove orb and respawn random color
+  grid[index] = colors[Math.floor(Math.random()*colors.length)];
+  renderGrid();
+  if(ki>=maxKi) superBtn.disabled=false;
 }
 
-function updateProjectiles() {
-  for(let i=projectiles.length-1;i>=0;i--){
-    const p = projectiles[i];
-    const left = parseInt(p.el.style.left);
-    const newLeft = p.target==='fighter2' ? left + p.speed : left - p.speed;
-    p.el.style.left = newLeft + 'px';
-
-    // Check collision
-    const targetPos = p.target==='fighter2' ? pos2 : pos1;
-    if((p.target==='fighter2' && newLeft >= targetPos) ||
-       (p.target==='fighter1' && newLeft <= targetPos + fighterWidth)){
-      applyDamage(p.target, p.damage);
-      p.el.style.display='none';
-      projectiles.splice(i,1);
-    }
-
-    if(newLeft < 0 || newLeft > gameWidth){
-      p.el.style.display='none';
-      projectiles.splice(i,1);
-    }
-  }
-  requestAnimationFrame(updateProjectiles);
+superBtn.onclick = ()=>{
+  // Deal big damage
+  const damage = Math.floor(Math.random()*50)+50;
+  enemyHp -= damage;
+  if(enemyHp<0) enemyHp=0;
+  enemyHpFill.style.width = enemyHp+'%';
+  ki = 0;
+  kiFill.style.width='0%';
+  superBtn.disabled = true;
+  if(enemyHp===0) alert('You Win!');
 }
 
-function applyDamage(fighter, damage){
-  if(fighter==='fighter1'){
-    health1 -= damage; if(health1<0) health1=0; health1Bar.style.width = health1*3+'px';
-  } else {
-    health2 -= damage; if(health2<0) health2=0; health2Bar.style.width = health2*3+'px';
-  }
-  if(health1===0) alert('Fighter 2 Wins!') && resetGame();
-  if(health2===0) alert('Fighter 1 Wins!') && resetGame();
-}
-
-function punch(fighter, target){
-  const damage = Math.floor(Math.random()*15)+5;
-  const original = fighter==='fighter1'?pos1:pos2;
-  const offset = fighter==='fighter1'?20:-20;
-  if(fighter==='fighter1'){ pos1+=offset; updateFighters(); setTimeout(()=>{pos1=original;updateFighters();},100);}
-  else{ pos2+=offset; updateFighters(); setTimeout(()=>{pos2=original;updateFighters();},100);}
-  applyDamage(target,damage);
-}
-
-document.addEventListener('keydown',(e)=>{
-  // Fighter1 controls: A/D move, W punch, S ki, Q super
-  if(e.key==='a'){ pos1-=10; if(pos1<0) pos1=0;}
-  if(e.key==='d'){ pos1+=10; if(pos1>gameWidth-fighterWidth) pos1=gameWidth-fighterWidth;}
-  if(e.key==='w'){ punch('fighter1','fighter2');}
-  if(e.key==='s'){ createProjectile('ki',pos1+fighterWidth,200,15,'fighter2',Math.floor(Math.random()*20)+5);}
-  if(e.key==='q'){ createProjectile('super',pos1+fighterWidth,180,20,'fighter2',Math.floor(Math.random()*35)+15);}
-  // Fighter2 controls: Left/Right move, Up punch, Down ki, Enter super
-  if(e.key==='ArrowLeft'){ pos2-=10; if(pos2<0) pos2=0;}
-  if(e.key==='ArrowRight'){ pos2+=10; if(pos2>gameWidth-fighterWidth) pos2=gameWidth-fighterWidth;}
-  if(e.key==='ArrowUp'){ punch('fighter2','fighter1');}
-  if(e.key==='ArrowDown'){ createProjectile('ki',pos2-20,200,-15,'fighter1',Math.floor(Math.random()*20)+5);}
-  if(e.key==='Enter'){ createProjectile('super',pos2-40,180,-20,'fighter1',Math.floor(Math.random()*35)+15);}
-  updateFighters();
-});
-
-function resetGame(){
-  health1=100; health2=100; pos1=50; pos2=650;
-  health1Bar.style.width='300px';
-  health2Bar.style.width='300px';
-  updateFighters();
-}
-
-updateFighters();
-updateProjectiles();
 </script>
 </body>
 </html>
