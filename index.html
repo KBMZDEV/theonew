@@ -22,9 +22,9 @@ document.addEventListener('keyup', e => keys[e.key] = false);
 
 // Load images
 const idleImg = new Image();
-idleImg.src = "https://us.images.westend61.de/0000465443pw/face-of-tabby-kitten-felis-silvestris-catus-with-blue-eyes-MJOF000870.jpg"; // replace with kitten idle URL
+idleImg.src = "IDLE_IMAGE_URL_HERE"; // Replace with idle kitten URL
 const shootImg = new Image();
-shootImg.src = "https://media.istockphoto.com/id/485809640/photo/cute-tabby-kitten.jpg"; // replace with kitten shooting URL
+shootImg.src = "SHOOT_IMAGE_URL_HERE"; // Replace with shooting kitten URL
 
 class Player {
   constructor() {
@@ -34,10 +34,9 @@ class Player {
     this.velX = 0;
     this.velY = 0;
     this.radius = 20;
-    this.shooting = false;
+    this.shootTimer = 0; // timer to show shooting image
   }
   update() {
-    this.shooting = false;
     if(keys['ArrowLeft']) this.angle -= 0.05;
     if(keys['ArrowRight']) this.angle += 0.05;
     if(keys['ArrowUp']) {
@@ -54,13 +53,16 @@ class Player {
     if(this.x > canvas.width) this.x = 0;
     if(this.y < 0) this.y = canvas.height;
     if(this.y > canvas.height) this.y = 0;
+
+    if(this.shootTimer > 0) this.shootTimer--; // decrease shooting timer
   }
   draw() {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    const img = this.shooting ? shootImg : idleImg;
-    ctx.drawImage(img, -img.width/4, -img.height/4, img.width/2, img.height/2);
+    const img = this.shootTimer > 0 ? shootImg : idleImg;
+    const size = 50; // reasonable ship size
+    ctx.drawImage(img, -size/2, -size/2, size, size);
     ctx.restore();
   }
 }
@@ -130,7 +132,7 @@ function spawnAsteroid(x,y,size){
 document.addEventListener('keydown', e=>{
   if(e.key===' '){
     bullets.push(new Bullet(player.x,player.y,player.angle));
-    player.shooting = true; // switch to shooting image
+    player.shootTimer = 5; // show shooting image for 5 frames
   }
 });
 
