@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Doom Dungeon Crawler - Sword Combat Fixed</title>
+<title>Doom Dungeon Crawler - Sword Combat</title>
 <style>
   body { margin: 0; overflow: hidden; background: black; }
   canvas { display: block; }
@@ -20,10 +20,8 @@ const tileSize = 64;
 const mapWidth = 20;
 const mapHeight = 15;
 
-// Generate empty map
+// Map generation
 const map = Array.from({length: mapHeight},()=>Array(mapWidth).fill(1));
-
-// Random rooms
 function createRoom(){
   const w = 3 + Math.floor(Math.random()*4);
   const h = 3 + Math.floor(Math.random()*4);
@@ -34,12 +32,8 @@ function createRoom(){
       map[i][j]=0;
   return {x:x+Math.floor(w/2), y:y+Math.floor(h/2)};
 }
-
-// Create 4 rooms
 const rooms = [];
 for(let i=0;i<4;i++) rooms.push(createRoom());
-
-// Connect rooms with corridors
 function createCorridor(a,b){
   let x=a.x, y=a.y;
   while(x!==b.x){ map[y][x]=0; x+=x<b.x?1:-1; }
@@ -64,7 +58,7 @@ let swordCooldown=0;
 document.addEventListener('keydown',e=>{
   if(e.key===' ' && swordCooldown<=0){
     swordCooldown=20;
-    const range=80;
+    const range=120; // increased sword range
     enemies.forEach(enemy=>{
       const dx=enemy.x-player.x;
       const dy=enemy.y-player.y;
@@ -89,7 +83,7 @@ function movePlayer(){
   if(map[top] && map[top][left]===0){ player.x=newX; player.y=newY; }
 }
 
-// Raycasting
+// Raycasting walls
 function castRays(){
   const fov=Math.PI*2/3;
   const numRays=300;
@@ -122,7 +116,7 @@ function drawOverlay(){
     let diff=angleToEnemy-player.angle;
     diff=Math.atan2(Math.sin(diff),Math.cos(diff));
 
-    // Check line-of-sight
+    // Line-of-sight check
     let visible=true;
     const steps=Math.floor(dist);
     for(let s=0;s<steps;s+=5){
@@ -132,7 +126,7 @@ function drawOverlay(){
     }
 
     if(visible && Math.abs(diff)<Math.PI/6){
-      const size=(tileSize*300)/dist*0.4; // smaller enemy
+      const size=(tileSize*300)/dist*0.6; // scale enemies more
       const screenX=(canvas.width/2)+(diff/(Math.PI/3))*(canvas.width/2);
       ctx.fillStyle='red';
       ctx.fillRect(screenX-size/2,(canvas.height/2)-size/2,size,size);
@@ -142,8 +136,8 @@ function drawOverlay(){
   // Sword swing
   if(swordCooldown>0){
     const swingProgress=(20-swordCooldown)/10; // 0-1
-    const swordLength=120;
-    const swordWidth=20;
+    const swordLength=180; // longer sword
+    const swordWidth=25;
     const angleOffset=(Math.PI/4)*(1-swingProgress);
     ctx.save();
     ctx.translate(canvas.width/2, canvas.height*0.75);
