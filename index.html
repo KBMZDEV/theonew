@@ -9,8 +9,8 @@
     background: url('https://i.imgur.com/0Z7vX3j.jpg') no-repeat center center fixed;
     background-size: cover;
     font-family: Arial, sans-serif;
-    color: white;
     text-align: center;
+    color: white;
   }
   #game {
     position: relative;
@@ -26,8 +26,8 @@
     bottom: 0;
     width: 100px;
     height: 150px;
-    background-size: cover;
-    transition: all 0.2s;
+    background-size: contain;
+    background-repeat: no-repeat;
   }
   #fighter1 { left: 50px; background-image: url('https://i.imgur.com/KkZxUqY.png'); }
   #fighter2 { right: 50px; background-image: url('https://i.imgur.com/7y5kF0S.png'); transform: scaleX(-1); }
@@ -40,15 +40,13 @@
   }
   #health1 { left: 10px; }
   #health2 { right: 10px; }
-  .attack, .super-attack {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+  .projectile {
     position: absolute;
+    border-radius: 50%;
     display: none;
   }
-  .attack { background: yellow; }
-  .super-attack { background: orange; width: 40px; height: 40px; }
+  .ki { width: 20px; height: 20px; background: yellow; }
+  .super { width: 40px; height: 40px; background: orange; }
 </style>
 </head>
 <body>
@@ -58,148 +56,115 @@
   <div id="fighter2" class="fighter"></div>
   <div id="health1" class="health-bar"></div>
   <div id="health2" class="health-bar"></div>
-  <div id="ki1" class="attack"></div>
-  <div id="ki2" class="attack"></div>
-  <div id="super1" class="super-attack"></div>
-  <div id="super2" class="super-attack"></div>
+  <div id="ki1" class="projectile ki"></div>
+  <div id="ki2" class="projectile ki"></div>
+  <div id="super1" class="projectile super"></div>
+  <div id="super2" class="projectile super"></div>
 </div>
 
-<audio id="punchSound" src="https://www.soundjay.com/human/sounds/punch-1.mp3"></audio>
-<audio id="kiSound" src="https://www.soundjay.com/misc/sounds/energy-blast-1.mp3"></audio>
-<audio id="superSound" src="https://www.soundjay.com/misc/sounds/explosion-1.mp3"></audio>
-
 <script>
-  const gameWidth = 800;
+const game = document.getElementById('game');
+const fighter1 = document.getElementById('fighter1');
+const fighter2 = document.getElementById('fighter2');
+const health1Bar = document.getElementById('health1');
+const health2Bar = document.getElementById('health2');
+const ki1 = document.getElementById('ki1');
+const ki2 = document.getElementById('ki2');
+const super1 = document.getElementById('super1');
+const super2 = document.getElementById('super2');
 
-  let health1 = 100;
-  let health2 = 100;
+let pos1 = 50;
+let pos2 = 650;
+let health1 = 100;
+let health2 = 100;
 
-  const fighter1 = document.getElementById('fighter1');
-  const fighter2 = document.getElementById('fighter2');
+const fighterWidth = 100;
+const fighterHeight = 150;
+const gameWidth = 800;
 
-  const ki1 = document.getElementById('ki1');
-  const ki2 = document.getElementById('ki2');
-  const super1 = document.getElementById('super1');
-  const super2 = document.getElementById('super2');
+const projectiles = [];
 
-  const punchSound = document.getElementById('punchSound');
-  const kiSound = document.getElementById('kiSound');
-  const superSound = document.getElementById('superSound');
+function updateFighters() {
+  fighter1.style.left = pos1 + 'px';
+  fighter2.style.left = pos2 + 'px';
+}
 
-  let pos1 = 50;
-  let pos2 = 650;
+function createProjectile(type, x, y, speed, target, damage) {
+  const el = type === 'ki' ? (target==='fighter2'?ki1:ki2) : (target==='fighter2'?super1:super2);
+  el.style.display = 'block';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  projectiles.push({el, speed, target, damage, type});
+}
 
-  document.addEventListener('keydown', (e) => {
-    // Fighter 1 movement & attacks
-    if (e.key === 'a') { pos1 -= 10; if(pos1 < 0) pos1 = 0; }
-    if (e.key === 'd') { pos1 += 10; if(pos1 > gameWidth - 100) pos1 = gameWidth - 100; }
-    if (e.key === 'w') { punch(fighter1, 'fighter2'); }
-    if (e.key === 's') { shootKi(ki1, fighter1, 'right'); }
-    if (e.key === 'q') { superAttack(super1, fighter1, 'right'); }
+function updateProjectiles() {
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p = projectiles[i];
+    const left = parseInt(p.el.style.left);
+    const newLeft = p.target==='fighter2' ? left + p.speed : left - p.speed;
+    p.el.style.left = newLeft + 'px';
 
-    // Fighter 2 movement & attacks
-    if (e.key === 'ArrowLeft') { pos2 -= 10; if(pos2 < 0) pos2 = 0; }
-    if (e.key === 'ArrowRight') { pos2 += 10; if(pos2 > gameWidth - 100) pos2 = gameWidth - 100; }
-    if (e.key === 'ArrowUp') { punch(fighter2, 'fighter1'); }
-    if (e.key === 'ArrowDown') { shootKi(ki2, fighter2, 'left'); }
-    if (e.key === 'Enter') { superAttack(super2, fighter2, 'left'); }
-
-    updatePositions();
-  });
-
-  function updatePositions() {
-    fighter1.style.left = pos1 + 'px';
-    fighter2.style.left = pos2 + 'px';
-  }
-
-  function punch(fighter, target) {
-    const damage = Math.floor(Math.random() * 15) + 5;
-    punchSound.play();
-
-    // Punch animation: move forward and back quickly
-    const originalPos = parseInt(fighter.style.left);
-    const offset = fighter === fighter1 ? 20 : -20;
-    fighter.style.left = originalPos + offset + 'px';
-    setTimeout(() => fighter.style.left = originalPos + 'px', 100);
-
-    hit(target, damage);
-  }
-
-  function shootKi(ki, fighter, direction) {
-    ki.style.display = 'block';
-    ki.style.top = fighter.offsetTop + 60 + 'px';
-    ki.style.left = fighter.offsetLeft + (direction === 'right' ? 100 : -20) + 'px';
-    kiSound.play();
-
-    let interval = setInterval(() => {
-      if (direction === 'right') ki.style.left = parseInt(ki.style.left) + 15 + 'px';
-      else ki.style.left = parseInt(ki.style.left) - 15 + 'px';
-
-      if ((direction === 'right' && parseInt(ki.style.left) >= pos2) ||
-          (direction === 'left' && parseInt(ki.style.left) <= pos1 + 100)) {
-        hit(direction === 'right' ? 'fighter2' : 'fighter1', Math.floor(Math.random() * 20) + 5);
-        ki.style.display = 'none';
-        clearInterval(interval);
-      }
-
-      if (parseInt(ki.style.left) > gameWidth || parseInt(ki.style.left) < 0) {
-        ki.style.display = 'none';
-        clearInterval(interval);
-      }
-    }, 20);
-  }
-
-  function superAttack(superEl, fighter, direction) {
-    superEl.style.display = 'block';
-    superEl.style.top = fighter.offsetTop + 50 + 'px';
-    superEl.style.left = fighter.offsetLeft + (direction === 'right' ? 100 : -40) + 'px';
-    superSound.play();
-
-    let interval = setInterval(() => {
-      if (direction === 'right') superEl.style.left = parseInt(superEl.style.left) + 25 + 'px';
-      else superEl.style.left = parseInt(superEl.style.left) - 25 + 'px';
-
-      if ((direction === 'right' && parseInt(superEl.style.left) >= pos2) ||
-          (direction === 'left' && parseInt(superEl.style.left) <= pos1 + 100)) {
-        hit(direction === 'right' ? 'fighter2' : 'fighter1', Math.floor(Math.random() * 35) + 15);
-        superEl.style.display = 'none';
-        clearInterval(interval);
-      }
-
-      if (parseInt(superEl.style.left) > gameWidth || parseInt(superEl.style.left) < 0) {
-        superEl.style.display = 'none';
-        clearInterval(interval);
-      }
-    }, 20);
-  }
-
-  function hit(fighter, damage) {
-    if (fighter === 'fighter1') {
-      health1 -= damage; if(health1 < 0) health1 = 0;
-      document.getElementById('health1').style.width = health1 * 3 + 'px';
-    } else {
-      health2 -= damage; if(health2 < 0) health2 = 0;
-      document.getElementById('health2').style.width = health2 * 3 + 'px';
+    // Check collision
+    const targetPos = p.target==='fighter2' ? pos2 : pos1;
+    if((p.target==='fighter2' && newLeft >= targetPos) ||
+       (p.target==='fighter1' && newLeft <= targetPos + fighterWidth)){
+      applyDamage(p.target, p.damage);
+      p.el.style.display='none';
+      projectiles.splice(i,1);
     }
-    checkWinner();
-  }
 
-  function checkWinner() {
-    if(health1 === 0) { alert('Fighter 2 Wins!'); resetGame(); }
-    if(health2 === 0) { alert('Fighter 1 Wins!'); resetGame(); }
+    if(newLeft < 0 || newLeft > gameWidth){
+      p.el.style.display='none';
+      projectiles.splice(i,1);
+    }
   }
+  requestAnimationFrame(updateProjectiles);
+}
 
-  function resetGame() {
-    health1 = 100;
-    health2 = 100;
-    pos1 = 50;
-    pos2 = 650;
-    updatePositions();
-    document.getElementById('health1').style.width = '300px';
-    document.getElementById('health2').style.width = '300px';
+function applyDamage(fighter, damage){
+  if(fighter==='fighter1'){
+    health1 -= damage; if(health1<0) health1=0; health1Bar.style.width = health1*3+'px';
+  } else {
+    health2 -= damage; if(health2<0) health2=0; health2Bar.style.width = health2*3+'px';
   }
+  if(health1===0) alert('Fighter 2 Wins!') && resetGame();
+  if(health2===0) alert('Fighter 1 Wins!') && resetGame();
+}
 
-  updatePositions();
+function punch(fighter, target){
+  const damage = Math.floor(Math.random()*15)+5;
+  const original = fighter==='fighter1'?pos1:pos2;
+  const offset = fighter==='fighter1'?20:-20;
+  if(fighter==='fighter1'){ pos1+=offset; updateFighters(); setTimeout(()=>{pos1=original;updateFighters();},100);}
+  else{ pos2+=offset; updateFighters(); setTimeout(()=>{pos2=original;updateFighters();},100);}
+  applyDamage(target,damage);
+}
+
+document.addEventListener('keydown',(e)=>{
+  // Fighter1 controls: A/D move, W punch, S ki, Q super
+  if(e.key==='a'){ pos1-=10; if(pos1<0) pos1=0;}
+  if(e.key==='d'){ pos1+=10; if(pos1>gameWidth-fighterWidth) pos1=gameWidth-fighterWidth;}
+  if(e.key==='w'){ punch('fighter1','fighter2');}
+  if(e.key==='s'){ createProjectile('ki',pos1+fighterWidth,200,15,'fighter2',Math.floor(Math.random()*20)+5);}
+  if(e.key==='q'){ createProjectile('super',pos1+fighterWidth,180,20,'fighter2',Math.floor(Math.random()*35)+15);}
+  // Fighter2 controls: Left/Right move, Up punch, Down ki, Enter super
+  if(e.key==='ArrowLeft'){ pos2-=10; if(pos2<0) pos2=0;}
+  if(e.key==='ArrowRight'){ pos2+=10; if(pos2>gameWidth-fighterWidth) pos2=gameWidth-fighterWidth;}
+  if(e.key==='ArrowUp'){ punch('fighter2','fighter1');}
+  if(e.key==='ArrowDown'){ createProjectile('ki',pos2-20,200,-15,'fighter1',Math.floor(Math.random()*20)+5);}
+  if(e.key==='Enter'){ createProjectile('super',pos2-40,180,-20,'fighter1',Math.floor(Math.random()*35)+15);}
+  updateFighters();
+});
+
+function resetGame(){
+  health1=100; health2=100; pos1=50; pos2=650;
+  health1Bar.style.width='300px';
+  health2Bar.style.width='300px';
+  updateFighters();
+}
+
+updateFighters();
+updateProjectiles();
 </script>
 </body>
 </html>
