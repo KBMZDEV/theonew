@@ -4,16 +4,15 @@
 <meta charset="utf-8">
 <title>Color-Chaser Snake — Chromebook</title>
 <style>
-  :root{--bg:#000;--fg:#fff;}
+  :root{--bg:#000;--fg:#fff;--box:#111}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;align-items:center;overflow:hidden;}
   canvas{background:#111;border:2px solid #fff;border-radius:6px;display:block;}
-  .menu{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;background:rgba(0,0,0,0.85);}
+  .menu{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:rgba(0,0,0,0.85);}
   .menu button{padding:10px 20px;font-size:18px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;}
-  .menu .points{font-size:16px;}
-  #skinSelect{padding:5px;font-size:16px;border-radius:6px;border:1px solid #fff;background:#000;color:#fff;}
+  .menu .points{margin-top:10px;font-size:16px;}
+  #skinSelect{margin-top:10px;padding:5px;font-size:16px;border-radius:6px;border:1px solid #fff;background:#000;color:#fff;}
   #caseAnimation{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);}
   #caseCanvas{background:#111;border:2px solid #fff;border-radius:6px;}
-  #winMessage{margin-top:10px;font-size:16px;font-weight:bold;}
 </style>
 </head>
 <body>
@@ -23,9 +22,8 @@
   <button id="startBtn">Start Game</button>
   <button id="casesBtn">Open Case (5 points)</button>
   <div class="points" id="pointsDisplay">Points: 0</div>
-  <label class="points">Select Skin:</label>
+  <label for="skinSelect" class="points">Select Skin:</label>
   <select id="skinSelect"></select>
-  <div id="winMessage"></div>
 </div>
 
 <div id="caseAnimation">
@@ -41,10 +39,20 @@ const startBtn=document.getElementById('startBtn');
 const casesBtn=document.getElementById('casesBtn');
 const pointsDisplay=document.getElementById('pointsDisplay');
 const skinSelect=document.getElementById('skinSelect');
-const winMessage=document.getElementById('winMessage');
 const caseOverlay=document.getElementById('caseAnimation');
 const caseCanvas=document.getElementById('caseCanvas');
 const caseCtx=caseCanvas.getContext('2d');
+
+// Win message overlay
+const winMessageOverlay = document.createElement('div');
+winMessageOverlay.style.position = 'absolute';
+winMessageOverlay.style.top = '20%';
+winMessageOverlay.style.width = '100%';
+winMessageOverlay.style.textAlign = 'center';
+winMessageOverlay.style.fontSize = '32px';
+winMessageOverlay.style.fontWeight = 'bold';
+winMessageOverlay.style.display = 'none';
+document.body.appendChild(winMessageOverlay);
 
 const CELL=15, COLS=canvas.width/CELL, ROWS=canvas.height/CELL;
 const MOVE_INTERVAL=120;
@@ -55,7 +63,6 @@ let timer, running=false, score=0, points=0;
 let obstacles=[], invincible=false, invTimer=0;
 let currentSkin='white';
 let ownedSkins=['white'];
-
 const colors=['red','green','blue','yellow','cyan','magenta'];
 const rareColors=['orange','purple','lime','pink','gold'];
 
@@ -86,7 +93,6 @@ function startGame(){
   timer=setInterval(tick,MOVE_INTERVAL);
   draw();
   menu.style.display='none';
-  winMessage.textContent='';
 }
 
 function gameOver(){
@@ -150,6 +156,7 @@ function updateSkinSelect(){
   });
 }
 
+// Change skin immediately on selection
 skinSelect.addEventListener('change',(e)=>{
   currentSkin=e.target.value;
   draw();
@@ -158,10 +165,16 @@ skinSelect.addEventListener('change',(e)=>{
 startBtn.addEventListener('click',()=>{ startGame(); });
 
 casesBtn.addEventListener('click',()=>{
-  if(points<5){ winMessage.textContent='Not enough points!'; winMessage.style.color='white'; return; }
+  if(points<5){ 
+    winMessageOverlay.textContent='Not enough points!';
+    winMessageOverlay.style.color='white';
+    winMessageOverlay.style.display='block';
+    setTimeout(()=>{winMessageOverlay.style.display='none';},2000);
+    return; 
+  }
   points-=5; updatePoints();
 
-  // Decide skin
+  // Decide skin and rarity
   const roll=Math.random();
   let finalSkin, rarity;
   if(roll<0.6){ finalSkin=colors[Math.floor(Math.random()*colors.length)]; rarity='Common'; }
@@ -181,7 +194,7 @@ casesBtn.addEventListener('click',()=>{
     caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
 
     for(let i=0;i<scrollSkins.length;i++){
-      const x=(i*80-offset+caseCanvas.width/2)% (scrollSkins.length*80) - 80;
+      const x=(i*80-offset+caseCanvas.width/2)%(scrollSkins.length*80) - 80;
       caseCtx.fillStyle=scrollSkins[i];
       caseCtx.fillRect(x,20,70,60);
     }
@@ -193,8 +206,11 @@ casesBtn.addEventListener('click',()=>{
       currentSkin=finalSkin;
       updatePoints();
 
-      winMessage.textContent = `You got a ${rarity} skin: ${finalSkin}!`;
-      winMessage.style.color = finalSkin;
+      // Show big win message above animation
+      winMessageOverlay.textContent = `You got a ${rarity} skin: ${finalSkin}!`;
+      winMessageOverlay.style.color = finalSkin;
+      winMessageOverlay.style.display = 'block';
+      setTimeout(()=>{winMessageOverlay.style.display='none';},3000);
 
       return;
     }
@@ -215,7 +231,6 @@ window.addEventListener('keydown',(e)=>{
 });
 
 canvas.addEventListener('click',()=>{ canvas.focus(); });
-
 })();
 </script>
 </body>
