@@ -3,147 +3,115 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dokkan-Style Game</title>
+<title>Side-Scroll Platformer</title>
 <style>
   body {
-    font-family: Arial, sans-serif;
-    background: url('https://i.imgur.com/0Z7vX3j.jpg') no-repeat center center fixed;
-    background-size: cover;
-    color: white;
-    text-align: center;
-  }
-  #game {
-    margin: 50px auto;
-    width: 360px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(6, 50px);
-    grid-gap: 5px;
-    margin-bottom: 20px;
-  }
-  .orb {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 20px;
-    user-select: none;
-  }
-  .ki-bar {
-    width: 360px;
-    height: 30px;
-    background: gray;
-    margin: 10px auto;
-    border-radius: 5px;
+    margin: 0;
     overflow: hidden;
+    background: linear-gradient(#87CEEB, #228B22);
   }
-  .ki-fill {
-    height: 100%;
-    width: 0%;
-    background: yellow;
-    transition: width 0.3s;
-  }
-  .hp-bar {
-    width: 360px;
-    height: 30px;
-    background: red;
-    margin: 10px auto;
-    border-radius: 5px;
-    overflow: hidden;
-  }
-  .hp-fill {
-    height: 100%;
-    width: 100%;
-    background: green;
-    transition: width 0.3s;
-  }
-  button {
-    padding: 10px 20px;
-    font-size: 18px;
-    cursor: pointer;
+  canvas {
+    display: block;
+    background: #87CEEB;
   }
 </style>
 </head>
 <body>
-
-<h1>Dokkan-Style Game</h1>
-
-<div class="hp-bar">
-  <div id="enemyHp" class="hp-fill"></div>
-</div>
-
-<div id="game">
-  <div class="grid" id="grid"></div>
-</div>
-
-<div class="ki-bar">
-  <div id="kiFill" class="ki-fill"></div>
-</div>
-
-<button id="superAttack" disabled>SUPER ATTACK!</button>
+<canvas id="game"></canvas>
 
 <script>
-const colors = ['red','blue','yellow','green','purple'];
-let ki = 0;
-let maxKi = 100;
-let enemyHp = 100;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-const gridEl = document.getElementById('grid');
-const kiFill = document.getElementById('kiFill');
-const enemyHpFill = document.getElementById('enemyHp');
-const superBtn = document.getElementById('superAttack');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-// Initialize grid
-const gridSize = 36;
-let grid = [];
-for(let i=0;i<gridSize;i++){
-  const color = colors[Math.floor(Math.random()*colors.length)];
-  grid.push(color);
-}
-renderGrid();
+const tileSize = 40;
+const worldWidth = 50;
+const worldHeight = 15;
 
-function renderGrid(){
-  gridEl.innerHTML = '';
-  grid.forEach((color,i)=>{
-    const orb = document.createElement('div');
-    orb.className='orb';
-    orb.style.background=color;
-    orb.textContent='';
-    orb.onclick=()=>collectOrb(i);
-    gridEl.appendChild(orb);
-  });
+// Generate terrain (simple)
+const world = [];
+for(let y=0; y<worldHeight; y++){
+  world[y] = [];
+  for(let x=0; x<worldWidth; x++){
+    if(y > worldHeight-3) world[y][x] = 'grass';
+    else world[y][x] = null;
+  }
 }
 
-function collectOrb(index){
-  const color = grid[index];
-  // Each orb gives random ki points
-  const kiGain = Math.floor(Math.random()*15)+5;
-  ki += kiGain;
-  if(ki > maxKi) ki = maxKi;
-  kiFill.style.width = (ki/maxKi*100)+'%';
-  // Remove orb and respawn random color
-  grid[index] = colors[Math.floor(Math.random()*colors.length)];
-  renderGrid();
-  if(ki>=maxKi) superBtn.disabled=false;
+// Player object
+const player = {
+  x: 100,
+  y: canvas.height - tileSize*3,
+  width: tileSize,
+  height: tileSize*2,
+  color: 'red',
+  vx: 0,
+  vy: 0,
+  speed: 5,
+  jumpPower: 15,
+  onGround: false
+};
+
+// Controls
+const keys = {};
+document.addEventListener('keydown', (e)=>{ keys[e.key]=true; });
+document.addEventListener('keyup', (e)=>{ keys[e.key]=false; });
+
+// Game loop
+function update(){
+  // Player movement
+  if(keys['a']) player.vx = -player.speed;
+  else if(keys['d']) player.vx = player.speed;
+  else player.vx = 0;
+
+  // Jump
+  if(keys['w'] && player.onGround){
+    player.vy = -player.jumpPower;
+    player.onGround = false;
+  }
+
+  // Gravity
+  player.vy += 0.8;
+
+  // Move player
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Collision with ground
+  const tileX = Math.floor(player.x / tileSize);
+  const tileY = Math.floor(player.y / tileSize);
+
+  if(tileY+2 >= worldHeight-2){
+    player.y = (worldHeight-2-player.height/tileSize)*tileSize;
+    player.vy = 0;
+    player.onGround = true;
+  }
+
+  draw();
+  requestAnimationFrame(update);
 }
 
-superBtn.onclick = ()=>{
-  // Deal big damage
-  const damage = Math.floor(Math.random()*50)+50;
-  enemyHp -= damage;
-  if(enemyHp<0) enemyHp=0;
-  enemyHpFill.style.width = enemyHp+'%';
-  ki = 0;
-  kiFill.style.width='0%';
-  superBtn.disabled = true;
-  if(enemyHp===0) alert('You Win!');
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Draw tiles
+  for(let y=0;y<worldHeight;y++){
+    for(let x=0;x<worldWidth;x++){
+      if(world[y][x]==='grass'){
+        ctx.fillStyle = '#228B22';
+        ctx.fillRect(x*tileSize, y*tileSize + canvas.height - worldHeight*tileSize, tileSize, tileSize);
+      }
+    }
+  }
+
+  // Draw player
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, player.y, player.width, player.height);
 }
 
+update();
 </script>
 </body>
 </html>
