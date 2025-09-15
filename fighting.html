@@ -216,4 +216,18 @@ casesBtn.addEventListener('click',()=>{
     if(frames>100){ speed*=0.9; }
     if(speed<0.5){
       caseOverlay.style.display='none';
-     
+      currentSkin=finalSkin;
+      updatePoints();
+      alert(`You got a ${rarity} skin: ${finalSkin}!`);
+      return;
+    }
+    requestAnimationFrame(animateCase);
+  }
+  animateCase();
+});
+
+updatePoints();
+})();
+</script>
+</body>
+</html>
