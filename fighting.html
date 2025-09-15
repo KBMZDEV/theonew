@@ -13,8 +13,7 @@
   #skinSelect{margin-top:10px;padding:5px;font-size:16px;border-radius:6px;border:1px solid #fff;background:#000;color:#fff;}
   #caseAnimation{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);}
   #caseCanvas{background:#111;border:2px solid #fff;border-radius:6px;}
-  #caseMessage{position:absolute;top:40%;left:50%;transform:translate(-50%, -50%);
-               font-size:36px;font-weight:bold;display:none;pointer-events:none;}
+  #caseMessage{position:absolute;top:30%;width:100%;text-align:center;font-size:36px;font-weight:bold;display:none;}
 </style>
 </head>
 <body>
@@ -35,20 +34,20 @@
 
 <script>
 (() => {
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const menu = document.getElementById('menu');
-const startBtn = document.getElementById('startBtn');
-const casesBtn = document.getElementById('casesBtn');
-const pointsDisplay = document.getElementById('pointsDisplay');
-const skinSelect = document.getElementById('skinSelect');
-const caseOverlay = document.getElementById('caseAnimation');
-const caseCanvas = document.getElementById('caseCanvas');
-const caseCtx = caseCanvas.getContext('2d');
-const caseMessage = document.getElementById('caseMessage');
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const menu=document.getElementById('menu');
+const startBtn=document.getElementById('startBtn');
+const casesBtn=document.getElementById('casesBtn');
+const pointsDisplay=document.getElementById('pointsDisplay');
+const skinSelect=document.getElementById('skinSelect');
+const caseOverlay=document.getElementById('caseAnimation');
+const caseCanvas=document.getElementById('caseCanvas');
+const caseCtx=caseCanvas.getContext('2d');
+const caseMessage=document.getElementById('caseMessage');
 
-const CELL = 15, COLS = canvas.width/CELL, ROWS = canvas.height/CELL;
-const MOVE_INTERVAL = 120;
+const CELL=15, COLS=canvas.width/CELL, ROWS=canvas.height/CELL;
+const MOVE_INTERVAL=120;
 
 let snake=[], dir={x:1,y:0}, nextDir={x:1,y:0};
 let food={x:0,y:0,color:'red',moving:false,dir:1};
@@ -80,11 +79,13 @@ function startGame(){
   snake=[{x:10,y:10,color:currentSkin},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
   dir={x:1,y:0}; nextDir=dir;
   obstacles=[]; placeObstacles(); placeFood();
-  running=true; invincible=false; invTimer=0;
+  running=true;
+  invincible=false; invTimer=0;
   if(timer) clearInterval(timer);
-  timer = setInterval(tick, MOVE_INTERVAL);
+  timer=setInterval(tick,MOVE_INTERVAL);
   draw();
   menu.style.display='none';
+  canvas.focus();
 }
 
 function gameOver(){
@@ -108,11 +109,11 @@ function tick(){
 
   if(head.x===food.x && head.y===food.y){
     points += 10;
-    if(head.color===food.color){} 
-    else{ points = Math.max(0, points-5); snake.pop(); }
-    if(Math.random()<0.1){ invincible=true; invTimer=50; }
+    if(head.color===food.color){ snake[0].color = food.color; }
+    else{ points = Math.max(0,points-5); snake.pop(); }
     placeFood(); updatePoints();
   } else snake.pop();
+
   if(invincible){ invTimer--; if(invTimer<=0) invincible=false; }
   draw();
 }
@@ -157,9 +158,9 @@ startBtn.addEventListener('click',()=>{ startGame(); });
 
 casesBtn.addEventListener('click',()=>{
   if(points<5){ alert("Not enough points! Each case costs 5."); return; }
-  points -= 5; updatePoints();
+  points-=5; updatePoints();
 
-  const roll = Math.random();
+  const roll=Math.random();
   let finalSkin;
   if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
   else if(roll<0.95) finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
@@ -171,38 +172,51 @@ casesBtn.addEventListener('click',()=>{
   const scrollSkins=[...colors,...rareColors,'gold','red','green','blue','yellow'];
   let offset=0, speed=20, frames=0;
 
+  caseMessage.style.display='none';
+  caseMessage.textContent = '';
+
   function animateCase(){
     frames++;
     caseCtx.fillStyle='#111';
     caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
 
     for(let i=0;i<scrollSkins.length;i++){
-      const x=(i*80-offset+caseCanvas.width/2)% (scrollSkins.length*80) - 80;
+      const x=(i*80-offset+caseCanvas.width/2) % (scrollSkins.length*80) - 80;
       caseCtx.fillStyle=scrollSkins[i];
       caseCtx.fillRect(x,20,70,60);
     }
 
-    offset += speed;
-    if(frames>100) speed *= 0.9;
-    if(speed < 0.5){
-      // Show big text before menu
-      caseMessage.style.color = finalSkin;
-      caseMessage.textContent = 'YOU GOT: ' + finalSkin.toUpperCase();
-      caseMessage.style.display = 'block';
+    offset+=speed;
+    if(frames>100){ speed*=0.9; }
+    if(speed<0.5){
+      // Show skin text in color before returning
+      caseMessage.style.display='block';
+      caseMessage.style.color=finalSkin;
+      caseMessage.textContent='You got: '+finalSkin.charAt(0).toUpperCase()+finalSkin.slice(1);
 
-      setTimeout(() => {
+      setTimeout(()=>{
         caseOverlay.style.display='none';
-        caseMessage.style.display='none';
-        currentSkin = finalSkin;
+        currentSkin=finalSkin;
         updatePoints();
-        menu.style.display='flex';
-      }, 1500);
+      }, 1500); // Show for 1.5s
       return;
     }
     requestAnimationFrame(animateCase);
   }
   animateCase();
 });
+
+// Keyboard controls
+window.addEventListener('keydown',(e)=>{
+  if(!running) return;
+  const k=e.key;
+  if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
+  else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
+  else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
+  else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
+});
+
+canvas.addEventListener('click',()=>{ canvas.focus(); });
 
 updatePoints();
 })();
