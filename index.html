@@ -22,9 +22,9 @@ document.addEventListener('keyup', e => keys[e.key] = false);
 
 // Load images
 const idleImg = new Image();
-idleImg.src = "https://us.images.westend61.de/0000465443pw/face-of-tabby-kitten-felis-silvestris-catus-with-blue-eyes-MJOF000870.jpg"; // Replace with idle kitten URL
+idleImg.src = "https://us.images.westend61.de/0000465443pw/face-of-tabby-kitten-felis-silvestris-catus-with-blue-eyes-MJOF000870.jpg"; // Replace with kitten idle URL
 const shootImg = new Image();
-shootImg.src = "https://media.istockphoto.com/id/485809640/photo/cute-tabby-kitten.jpg?s=612x612&w=0&k=20&c=m0sUc4IpG1rOVs3Oyzex_tfsphPSWhBIKGVf2TZj9w4="; // Replace with shooting kitten URL
+shootImg.src = "https://media.istockphoto.com/id/485809640/photo/cute-tabby-kitten.jpg?s=612x612&w=0&k=20&c=m0sUc4IpG1rOVs3Oyzex_tfsphPSWhBIKGVf2TZj9w4="; // Replace with kitten shooting URL
 
 class Player {
   constructor() {
@@ -34,7 +34,8 @@ class Player {
     this.velX = 0;
     this.velY = 0;
     this.radius = 20;
-    this.shootTimer = 0; // timer to show shooting image
+    this.shootTime = 0; // timestamp when last shot
+    this.shootDuration = 500; // 0.5 seconds
   }
   update() {
     if(keys['ArrowLeft']) this.angle -= 0.05;
@@ -53,15 +54,14 @@ class Player {
     if(this.x > canvas.width) this.x = 0;
     if(this.y < 0) this.y = canvas.height;
     if(this.y > canvas.height) this.y = 0;
-
-    if(this.shootTimer > 0) this.shootTimer--; // decrease shooting timer
   }
   draw() {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    const img = this.shootTimer > 0 ? shootImg : idleImg;
-    const size = 50; // reasonable ship size
+    const now = Date.now();
+    const img = (now - this.shootTime < this.shootDuration) ? shootImg : idleImg;
+    const size = 50; // ship size
     ctx.drawImage(img, -size/2, -size/2, size, size);
     ctx.restore();
   }
@@ -129,10 +129,11 @@ function spawnAsteroid(x,y,size){
   }
 }
 
+// Shooting bullets
 document.addEventListener('keydown', e=>{
   if(e.key===' '){
-    bullets.push(new Bullet(player.x,player.y,player.angle));
-    player.shootTimer = 5; // show shooting image for 5 frames
+    bullets.push(new Bullet(player.x, player.y, player.angle));
+    player.shootTime = Date.now(); // shooting image shows for 0.5 sec
   }
 });
 
