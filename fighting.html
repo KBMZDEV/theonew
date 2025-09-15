@@ -1,0 +1,287 @@
+document.write(`
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tiny Fighter — Chromebook</title>
+<style>
+  :root{--bg:#000;--fg:#fff;--panel:#111;--p1:#4bd3ff;--p2:#ff6b6b}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;gap:12px}
+  .game-card{background:var(--panel);border:2px solid var(--fg);padding:12px;border-radius:10px;display:inline-block}
+  canvas{background:#070707;display:block;border-radius:8px}
+  .hud{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}
+  .bar{height:18px;width:260px;background:#222;border:1px solid #333;border-radius:6px;overflow:hidden}
+  .bar > i{display:block;height:100%}
+  .p1bar{background:linear-gradient(90deg,var(--p1),#06a3d6)}
+  .p2bar{background:linear-gradient(90deg,var(--p2),#d94a4a)}
+  .center{display:flex;flex-direction:column;align-items:center;gap:6px}
+  button{background:transparent;color:var(--fg);border:1px solid var(--fg);padding:6px 10px;border-radius:6px;cursor:pointer}
+  .small{font-size:0.9rem;opacity:0.9}
+  .controls{display:flex;gap:10px;margin-top:8px;justify-content:center}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="game-card" role="application" aria-label="Tiny Fighter">
+      <div class="hud">
+        <div>
+          <div class="small">Player 1</div>
+          <div class="bar"><i id="p1bar" class="p1bar" style="width:100%"></i></div>
+        </div>
+        <div class="center">
+          <div id="message" class="small">Fight!</div>
+          <div style="display:flex;gap:8px">
+            <button id="restart">Restart</button>
+            <div class="small">Controls: P1 A/D W S • P2 ←/→ ↑ ↓</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="small">Player 2</div>
+          <div class="bar"><i id="p2bar" class="p2bar" style="width:100%"></i></div>
+        </div>
+      </div>
+      <canvas id="game" width="720" height="320" tabindex="0"></canvas>
+      <div class="controls small">Bright colors = players. Attack when close to hit.</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const p1bar = document.getElementById('p1bar');
+  const p2bar = document.getElementById('p2bar');
+  const msg = document.getElementById('message');
+  const restartBtn = document.getElementById('restart');
+
+  const W = canvas.width, H = canvas.height;
+  const GROUND = H - 48;
+  const GRAVITY = 0.9;
+  const FRICTION = 0.9;
+
+  function makePlayer(x, color) {
+    return {
+      x, y: GROUND - 48,
+      w: 36, h: 48,
+      vx: 0, vy: 0,
+      dir: 1, // 1 = right, -1 = left
+      onGround: true,
+      attacking: false,
+      attackTimer: 0,
+      hp: 100,
+      color,
+      name: ''
+    };
+  }
+
+  let p1 = makePlayer(120, '#4bd3ff');
+  p1.name = 'P1';
+  let p2 = makePlayer(W-160, '#ff6b6b');
+  p2.name = 'P2';
+
+  let keys = {};
+  let running = true;
+  let gameOver = false;
+  let lastTime = 0;
+
+  // Controls mapping
+  const controls = {
+    p1: { left: 'a', right: 'd', jump: 'w', attack: 's' },
+    p2: { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', attack: 'ArrowDown' }
+  };
+
+  function reset() {
+    p1 = makePlayer(120, '#4bd3ff'); p1.name='P1';
+    p2 = makePlayer(W-160, '#ff6b6b'); p2.name='P2';
+    keys = {};
+    running = true;
+    gameOver = false;
+    msg.textContent = 'Fight!';
+    updateBars();
+  }
+
+  function updateBars() {
+    p1bar.style.width = Math.max(0, p1.hp) + '%';
+    p2bar.style.width = Math.max(0, p2.hp) + '%';
+  }
+
+  function rectsIntersect(a, b) {
+    return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
+  }
+
+  function attackHitbox(player) {
+    // short hitbox in front of the player when attacking
+    const reach = 28;
+    const w = reach, h = 20;
+    const x = player.dir === 1 ? player.x + player.w : player.x - reach;
+    const y = player.y + player.h/2 - h/2;
+    return { x, y, w, h };
+  }
+
+  function updatePlayer(pl, opponent, ctrl) {
+    // horizontal movement
+    let moving = false;
+    if (keys[ctrl.left]) { pl.vx = Math.max(pl.vx - 0.9, -4); pl.dir = -1; moving=true; }
+    if (keys[ctrl.right]) { pl.vx = Math.min(pl.vx + 0.9, 4); pl.dir = 1; moving=true; }
+    if (!moving) pl.vx *= FRICTION;
+
+    // jump
+    if (keys[ctrl.jump] && pl.onGround) { pl.vy = -12; pl.onGround = false; }
+
+    // attack
+    if (keys[ctrl.attack] && !pl.attacking) {
+      pl.attacking = true;
+      pl.attackTimer = 18; // frames attack is active
+    }
+
+    // physics
+    pl.vy += GRAVITY * 0.5;
+    pl.x += pl.vx;
+    pl.y += pl.vy;
+
+    // ground collision
+    if (pl.y + pl.h >= GROUND) {
+      pl.y = GROUND - pl.h;
+      pl.vy = 0;
+      pl.onGround = true;
+    }
+
+    // clamp within stage
+    pl.x = Math.max(12, Math.min(W - pl.w - 12, pl.x));
+
+    // attack processing
+    if (pl.attacking) {
+      pl.attackTimer--;
+      if (pl.attackTimer <= 0) {
+        pl.attacking = false;
+        pl.attackTimer = 0;
+      } else {
+        // active frames in the first half
+        const active = pl.attackTimer > 6;
+        if (active) {
+          const hb = attackHitbox(pl);
+          const oppRect = { x: opponent.x, y: opponent.y, w: opponent.w, h: opponent.h };
+          if (rectsIntersect(hb, oppRect)) {
+            // apply damage and knockback only once per attack sequence
+            if (!opponent._justHit) {
+              opponent.hp -= 8;
+              opponent._justHit = 12; // short invul counter to avoid multi-hit
+              // knockback
+              opponent.vx += pl.dir * 3;
+              opponent.vy = -4;
+            }
+          }
+        }
+      }
+    }
+
+    // reduce invul counter
+    if (opponent && opponent._justHit) opponent._justHit--;
+
+    // small friction cap
+    if (Math.abs(pl.vx) < 0.05) pl.vx = 0;
+  }
+
+  function drawPlayer(pl) {
+    // body
+    ctx.fillStyle = pl.color;
+    ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+
+    // face (small)
+    ctx.fillStyle = '#fff';
+    const eye = pl.dir === 1 ? pl.x + pl.w - 10 : pl.x + 6;
+    ctx.fillRect(eye, pl.y + 8, 6, 6);
+
+    // attack hitbox (for dev view)
+    if (pl.attacking) {
+      const hb = attackHitbox(pl);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(hb.x, hb.y, hb.w, hb.h);
+    }
+  }
+
+  function draw() {
+    // clear
+    ctx.clearRect(0,0,W,H);
+
+    // background stage
+    ctx.fillStyle = '#0b0b0b';
+    ctx.fillRect(0,0,W,H);
+
+    // ground
+    ctx.fillStyle = '#121212';
+    ctx.fillRect(0,GROUND, W, H-GROUND);
+
+    // center line
+    ctx.fillStyle = '#1f1f1f';
+    ctx.fillRect(W/2 - 1, GROUND - 120, 2, 120);
+
+    // players
+    drawPlayer(p1);
+    drawPlayer(p2);
+
+    // names & hp
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(10,10,120,28);
+    ctx.fillRect(W-130,10,120,28);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Arial';
+    ctx.fillText(p1.name, 16, 30);
+    ctx.fillText('HP: ' + Math.max(0, p1.hp), 70, 30);
+
+    ctx.fillText(p2.name, W-124, 30);
+    ctx.fillText('HP: ' + Math.max(0, p2.hp), W-64, 30);
+  }
+
+  function step(ts) {
+    if (!lastTime) lastTime = ts;
+    const dt = (ts - lastTime) / 16.67; // ~60fps normalization
+    lastTime = ts;
+
+    if (running && !gameOver) {
+      // update players
+      updatePlayer(p1, p2, controls.p1);
+      updatePlayer(p2, p1, controls.p2);
+
+      // simple auto-facing
+      if (p1.x < p2.x) p1.dir = 1; else p1.dir = -1;
+      if (p2.x < p1.x) p2.dir = 1; else p2.dir = -1;
+
+      // update health bars
+      updateBars();
+
+      // check win
+      if (p1.hp <= 0 && p2.hp <= 0) { gameOver = true; running = false; msg.textContent = "Draw!"; }
+      else if (p1.hp <= 0) { gameOver = true; running = false; msg.textContent = "Player 2 Wins!"; }
+      else if (p2.hp <= 0) { gameOver = true; running = false; msg.textContent = "Player 1 Wins!"; }
+    }
+
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  // input handlers
+  window.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    // prevent scrolling with arrow keys
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+  });
+
+  restartBtn.addEventListener('click', reset);
+
+  // focus canvas to catch keyboard on first click
+  canvas.addEventListener('click', ()=> canvas.focus());
+  canvas.setAttribute('tabindex','0');
+
+  reset();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
+`);
