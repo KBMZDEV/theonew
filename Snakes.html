@@ -27,7 +27,12 @@ const VIEW_HEIGHT = Math.floor(canvas.height / CELL);
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 50;
 
-let player = {x: 25, y: 25, skin: 'white'};
+// Snake player
+let snake = [{x:25, y:25}];
+let snakeDir = {x:0, y:0};
+let snakeLength = 1;
+let playerSkin = 'white';
+
 let points = 0;
 let ownedSkins = ['white'];
 let items = [];
@@ -35,25 +40,30 @@ let npcs = [];
 let quests = [];
 let keys = {};
 
-// Generate items (like food)
+// Generate items
 for(let i=0;i<50;i++){
     items.push({x:Math.floor(Math.random()*MAP_WIDTH), y:Math.floor(Math.random()*MAP_HEIGHT), type:'apple'});
 }
 
 // Generate NPCs
-npcs.push({x:10,y:10,name:'Bob',quest:'Collect 5 apples',questItem:'apple',questCount:5,completed:false});
-npcs.push({x:40,y:35,name:'Alice',quest:'Find the golden skin',questItem:'gold',questCount:1,completed:false});
+npcs.push({x:10,y:10,name:'Bob',quest:'Collect 5 apples',questItem:'apple',questCount:5,completed:false,collected:0});
+npcs.push({x:40,y:35,name:'Alice',quest:'Find the golden skin',questItem:'gold',questCount:1,completed:false,collected:0});
 
 // Camera
 let camera = {x:0, y:0};
 
 // Handle keys
-window.addEventListener('keydown', e=>keys[e.key]=true);
-window.addEventListener('keyup', e=>keys[e.key]=false);
+window.addEventListener('keydown', e=>{
+    keys[e.key]=true;
+});
+window.addEventListener('keyup', e=>{
+    keys[e.key]=false;
+});
 
 // Game loop
 function gameLoop(){
     handleMovement();
+    updateSnake();
     checkItemCollision();
     updateCamera();
     draw();
@@ -63,25 +73,43 @@ function gameLoop(){
 
 // Movement
 function handleMovement(){
-    if(keys['ArrowUp']) player.y = Math.max(0, player.y-1);
-    if(keys['ArrowDown']) player.y = Math.min(MAP_HEIGHT-1, player.y+1);
-    if(keys['ArrowLeft']) player.x = Math.max(0, player.x-1);
-    if(keys['ArrowRight']) player.x = Math.min(MAP_WIDTH-1, player.x+1);
+    if(keys['ArrowUp'] && snakeDir.y===0) snakeDir = {x:0,y:-1};
+    if(keys['ArrowDown'] && snakeDir.y===0) snakeDir = {x:0,y:1};
+    if(keys['ArrowLeft'] && snakeDir.x===0) snakeDir = {x:-1,y:0};
+    if(keys['ArrowRight'] && snakeDir.x===0) snakeDir = {x:1,y:0};
+}
+
+// Update snake positions
+function updateSnake(){
+    if(snakeDir.x===0 && snakeDir.y===0) return;
+    const newHead = {x:snake[0].x+snakeDir.x, y:snake[0].y+snakeDir.y};
+    // Check walls
+    if(newHead.x<0 || newHead.x>=MAP_WIDTH || newHead.y<0 || newHead.y>=MAP_HEIGHT){
+        resetGame();
+        return;
+    }
+    // Check self collision
+    if(snake.some((seg,i)=>i>0 && seg.x===newHead.x && seg.y===newHead.y)){
+        resetGame();
+        return;
+    }
+    snake.unshift(newHead);
+    if(snake.length>snakeLength) snake.pop();
 }
 
 // Check item collection
 function checkItemCollision(){
     items = items.filter(item=>{
-        if(item.x===player.x && item.y===player.y){
+        if(item.x===snake[0].x && item.y===snake[0].y){
             points++;
-            // Check quest progress
-            quests.forEach(q=>{
-                if(q.questItem===item.type && !q.completed){
-                    q.collected++;
-                    if(q.collected>=q.questCount) q.completed=true;
+            snakeLength++;
+            npcs.forEach(npc=>{
+                if(npc.questItem===item.type && !npc.completed){
+                    npc.collected++;
+                    if(npc.collected>=npc.questCount) npc.completed=true;
                 }
             });
-            return false; // remove collected item
+            return false;
         }
         return true;
     });
@@ -89,55 +117,70 @@ function checkItemCollision(){
 
 // Update camera
 function updateCamera(){
-    camera.x = player.x - Math.floor(VIEW_WIDTH/2);
-    camera.y = player.y - Math.floor(VIEW_HEIGHT/2);
+    camera.x = snake[0].x - Math.floor(VIEW_WIDTH/2);
+    camera.y = snake[0].y - Math.floor(VIEW_HEIGHT/2);
     camera.x = Math.max(0, Math.min(MAP_WIDTH-VIEW_WIDTH, camera.x));
     camera.y = Math.max(0, Math.min(MAP_HEIGHT-VIEW_HEIGHT, camera.y));
 }
 
-// Draw everything
+// Draw
 function draw(){
     ctx.fillStyle='#111';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // Draw items
+    // Items
     items.forEach(item=>{
-        const dx = (item.x - camera.x)*CELL;
-        const dy = (item.y - camera.y)*CELL;
+        const dx = (item.x-camera.x)*CELL;
+        const dy = (item.y-camera.y)*CELL;
         ctx.fillStyle='red';
         ctx.fillRect(dx+2, dy+2, CELL-4, CELL-4);
     });
 
-    // Draw NPCs
+    // NPCs
     npcs.forEach(npc=>{
-        const dx = (npc.x - camera.x)*CELL;
-        const dy = (npc.y - camera.y)*CELL;
+        const dx = (npc.x-camera.x)*CELL;
+        const dy = (npc.y-camera.y)*CELL;
         ctx.fillStyle='orange';
         ctx.fillRect(dx+2, dy+2, CELL-4, CELL-4);
     });
 
-    // Draw player
-    const px = (player.x - camera.x)*CELL;
-    const py = (player.y - camera.y)*CELL;
-    ctx.fillStyle = player.skin;
-    ctx.fillRect(px+1, py+1, CELL-2, CELL-2);
+    // Snake
+    snake.forEach((seg,i)=>{
+        const dx = (seg.x-camera.x)*CELL;
+        const dy = (seg.y-camera.y)*CELL;
+        ctx.fillStyle = i===0 ? playerSkin : `rgb(${220-i*10},${220-i*10},${220-i*10})`;
+        ctx.fillRect(dx+1, dy+1, CELL-2, CELL-2);
+    });
 }
 
 // HUD
 function updateHUD(){
-    let hudText = `Points: ${points}<br>`;
-    hudText += `Skins: ${ownedSkins.join(', ')}<br>`;
+    let hudText = `Points: ${points}<br>Skins: ${ownedSkins.join(', ')}<br>`;
     npcs.forEach(npc=>{
-        if(Math.abs(player.x-npc.x)<=1 && Math.abs(player.y-npc.y)<=1){
-            hudText += `${npc.name}: ${npc.quest} ${npc.completed ? "(Completed)" : ""}<br>`;
+        if(Math.abs(snake[0].x-npc.x)<=1 && Math.abs(snake[0].y-npc.y)<=1){
+            hudText += `${npc.name}: ${npc.quest} ${npc.completed?"(Completed)":""}<br>`;
         }
     });
     hud.innerHTML = hudText;
 }
 
-// Start game
-gameLoop();
+function resetGame(){
+    snake = [{x:25,y:25}];
+    snakeDir = {x:0,y:0};
+    snakeLength = 1;
+    points = 0;
+    items = [];
+    for(let i=0;i<50;i++){
+        items.push({x:Math.floor(Math.random()*MAP_WIDTH), y:Math.floor(Math.random()*MAP_HEIGHT), type:'apple'});
+    }
+    npcs.forEach(npc=>{
+        npc.completed=false;
+        npc.collected=0;
+    });
+}
 
+// Start
+gameLoop();
 })();
 </script>
 </body>
