@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Color-Chaser Snake — Hub</title>
+<title>Color-Chaser Snake — Hub + Game</title>
 <style>
   :root{--bg:#000;--fg:#fff;}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;align-items:center;overflow:hidden;}
@@ -11,6 +11,9 @@
   .menu button{padding:10px 20px;font-size:18px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;}
   .menu .points{margin-top:10px;font-size:16px;}
   #skinSelect{margin-top:10px;padding:5px;font-size:16px;border-radius:6px;border:1px solid #fff;background:#000;color:#fff;}
+  #caseAnimation{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);}
+  #caseCanvas{background:#111;border:2px solid #fff;border-radius:6px;}
+  #caseResult{position:absolute;top:30%;width:100%;text-align:center;font-size:32px;font-weight:bold;display:none;}
 </style>
 </head>
 <body>
@@ -24,6 +27,11 @@
   <select id="skinSelect"></select>
 </div>
 
+<div id="caseAnimation">
+  <canvas id="caseCanvas" width="400" height="100"></canvas>
+  <div id="caseResult"></div>
+</div>
+
 <script>
 (() => {
 const canvas = document.getElementById('game');
@@ -33,28 +41,55 @@ const startBtn = document.getElementById('startBtn');
 const casesBtn = document.getElementById('casesBtn');
 const pointsDisplay = document.getElementById('pointsDisplay');
 const skinSelect = document.getElementById('skinSelect');
+const caseOverlay = document.getElementById('caseAnimation');
+const caseCanvas = document.getElementById('caseCanvas');
+const caseCtx = caseCanvas.getContext('2d');
+const caseResult = document.getElementById('caseResult');
 
 const CELL = 15, COLS = canvas.width / CELL, ROWS = canvas.height / CELL;
 const MOVE_INTERVAL = 120;
 
-// Snake state
-let snake = [{x:10, y:10}];
-let dir = {x:0, y:0}, nextDir = {x:0, y:0};
-let grow = 0;
+// --- Hub state ---
+let hubSnake = [{x:10, y:10}];
+let hubDir = {x:0, y:0}, hubNextDir = {x:0, y:0};
+let inHub = true;
 
-// Hub/game flags
-let inHub = true;  // True: menu hub, False: real game
-let running = false;
+// --- Game state ---
+let snake = [], dir = {x:1,y:0}, nextDir = {x:1,y:0};
+let food = {x:0, y:0, color:'red'};
+let timer, running=false;
+let obstacles=[], invincible=false, invTimer=0;
 
-// Points and skins
-let points = 0;
-let ownedSkins = ['white'];
-let currentSkin = 'white';
+// Skins & points
+let currentSkin='white';
+let ownedSkins=['white'];
+let points=0;
+const colors=['red','green','blue','yellow','cyan','magenta'];
+const rareColors=['orange','purple','lime','pink','gold'];
 
+// --- Utility ---
+function randPos(){ return {x:Math.floor(Math.random()*COLS), y:Math.floor(Math.random()*ROWS)}; }
+
+function placeFood(){
+  let p;
+  do { p = randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
+  food = {...p, color: colors[Math.floor(Math.random()*colors.length)]};
+}
+
+function placeObstacles(count=5){
+  obstacles=[];
+  for(let i=0;i<count;i++){
+    let p;
+    do { p = randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
+    obstacles.push(p);
+  }
+}
+
+// --- Hub functions ---
 function drawHub(){
     ctx.fillStyle = '#111';
     ctx.fillRect(0,0,canvas.width,canvas.height);
-    snake.forEach((s,i)=>{
+    hubSnake.forEach((s,i)=>{
         ctx.fillStyle = i===0?currentSkin:`rgb(${220-i*10},${220-i*10},${220-i*10})`;
         ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
     });
@@ -64,58 +99,71 @@ function drawHub(){
     ctx.fillText('Points: '+points, 10, 40);
 }
 
-function drawGame(){
-    ctx.fillStyle='#111';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    snake.forEach((s,i)=>{
-        ctx.fillStyle = i===0?currentSkin:`rgb(${220-i*10},${220-i*10},${220-i*10})`;
-        ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
-    });
-}
-
-function updateHubSnake(){
-    const head = {x:snake[0].x + dir.x, y:snake[0].y + dir.y};
-    // Prevent leaving hub boundaries
+function updateHub(){
+    const head = {x:hubSnake[0].x + hubDir.x, y:hubSnake[0].y + hubDir.y};
     head.x = Math.max(0, Math.min(COLS-1, head.x));
     head.y = Math.max(0, Math.min(ROWS-1, head.y));
-    snake.unshift(head);
-    if(grow>0) grow--;
-    else snake.pop();
+    hubSnake.unshift(head);
+    hubSnake.pop();
 }
 
 function hubLoop(){
-    updateHubSnake();
+    if(!inHub) return;
+    updateHub();
     drawHub();
-    if(inHub) requestAnimationFrame(hubLoop);
+    requestAnimationFrame(hubLoop);
 }
 
+// --- Game functions ---
 function startGame(){
-    inHub = false;
-    dir = {x:1,y:0};
-    nextDir = dir;
-    running = true;
+    inHub=false;
     snake = [{x:10,y:10,color:currentSkin},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
+    dir = {x:1,y:0}; nextDir = dir;
+    running = true;
+    obstacles=[]; placeObstacles(); placeFood();
     menu.style.display='none';
-    canvas.focus();
+    if(timer) clearInterval(timer);
+    timer = setInterval(tick, MOVE_INTERVAL);
 }
 
-// Controls
-window.addEventListener('keydown', e=>{
-    const k = e.key;
-    if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
-    else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
-    else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
-    else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
-});
+function gameOver(){
+  running=false;
+  if(timer){ clearInterval(timer); timer=null; }
+  menu.style.display='flex';
+}
 
-// Hub movement uses nextDir if inHub
-setInterval(()=>{
-    if(inHub){
-        dir = nextDir;
-    }
-}, MOVE_INTERVAL);
+function tick(){
+  if((nextDir.x!==-dir.x||nextDir.y!==-dir.y)||snake.length===1) dir=nextDir;
+  const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y, color:snake[0].color};
 
-// Skin selection
+  if(head.x<0 || head.x>=COLS || head.y<0 || head.y>=ROWS){ gameOver(); return; }
+  if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ gameOver(); return; }
+  if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ gameOver(); return; }
+
+  snake.unshift(head);
+
+  if(head.x===food.x && head.y===food.y){
+    points += 10;
+    if(head.color===food.color){ head.color=food.color; }
+    placeFood(); updatePoints();
+  } else snake.pop();
+
+  drawGame();
+}
+
+function drawGame(){
+    ctx.fillStyle='#111'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#555'; obstacles.forEach(o=>ctx.fillRect(o.x*CELL+2,o.y*CELL+2,CELL-4,CELL-4));
+    ctx.fillStyle=food.color; ctx.fillRect(food.x*CELL+2,food.y*CELL+2,CELL-4,CELL-4);
+    snake.forEach((s,i)=>{
+        ctx.fillStyle=i===0?currentSkin:`rgb(${220-i*10},${220-i*10},${220-i*10})`;
+        ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
+    });
+    ctx.fillStyle='white'; ctx.font='16px Arial';
+    ctx.fillText('Points: '+points,10,20);
+}
+
+// --- Skins ---
 function updateSkinSelect(){
   skinSelect.innerHTML='';
   ownedSkins.forEach(skin=>{
@@ -128,13 +176,81 @@ function updateSkinSelect(){
 skinSelect.addEventListener('change', e=>{
   currentSkin = e.target.value;
 });
-
 updateSkinSelect();
+updatePoints();
 
-// Start hub loop
-hubLoop();
+function updatePoints(){
+  pointsDisplay.textContent='Points: '+points;
+}
 
+// --- Case animation ---
+casesBtn.addEventListener('click',()=>{
+  if(points<5){ alert("Not enough points!"); return; }
+  points -=5; updatePoints();
+
+  const roll = Math.random();
+  let finalSkin;
+  if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
+  else if(roll<0.95) finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
+  else finalSkin='gold';
+  ownedSkins.push(finalSkin);
+
+  // Show case animation
+  caseOverlay.style.display='flex';
+  caseResult.style.display='none';
+  const scrollSkins = [...colors,...rareColors,'gold','red','green','blue','yellow'];
+  let offset=0, speed=20, frames=0;
+
+  function animateCase(){
+    frames++;
+    caseCtx.fillStyle='#111'; caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
+    for(let i=0;i<scrollSkins.length;i++){
+      const x = (i*80 - offset + caseCanvas.width/2) % (scrollSkins.length*80) - 80;
+      caseCtx.fillStyle = scrollSkins[i]; caseCtx.fillRect(x,20,70,60);
+    }
+    offset += speed;
+    if(frames>100) speed*=0.9;
+    if(speed<0.5){
+      caseResult.style.color = finalSkin;
+      caseResult.textContent = 'You got: ' + finalSkin.toUpperCase();
+      caseResult.style.display='block';
+      setTimeout(()=>{
+        caseOverlay.style.display='none';
+        updatePoints();
+      },1500);
+      currentSkin = finalSkin;
+      updateSkinSelect();
+      return;
+    }
+    requestAnimationFrame(animateCase);
+  }
+  animateCase();
+});
+
+// --- Controls ---
+window.addEventListener('keydown', e=>{
+    const k = e.key;
+    if(k==='ArrowUp'||k==='w'||k==='W') hubNextDir={x:0,y:-1};
+    else if(k==='ArrowDown'||k==='s'||k==='S') hubNextDir={x:0,y:1};
+    else if(k==='ArrowLeft'||k==='a'||k==='A') hubNextDir={x:-1,y:0};
+    else if(k==='ArrowRight'||k==='d'||k==='D') hubNextDir={x:1,y:0};
+
+    if(running){
+        if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
+        else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
+        else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
+        else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
+    }
+});
+
+// Hub moves every interval
+setInterval(()=>{ if(inHub) hubDir = hubNextDir; }, MOVE_INTERVAL);
+
+canvas.addEventListener('click', ()=> canvas.focus());
 startBtn.addEventListener('click', startGame);
+
+// Start hub animation
+hubLoop();
 
 })();
 </script>
