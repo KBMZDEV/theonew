@@ -17,7 +17,7 @@
 
 <div class="menu" id="menu">
   <button id="startBtn">Start Game</button>
-  <button id="casesBtn">Open Case</button>
+  <button id="casesBtn">Open Case (5 points)</button>
   <div class="points" id="pointsDisplay">Points: 0</div>
   <div class="points" id="skinDisplay">Current Skin: White</div>
 </div>
@@ -72,6 +72,7 @@ function startGame(){
   if(timer) clearInterval(timer);
   timer=setInterval(tick,MOVE_INTERVAL);
   draw();
+  menu.style.display='none';
 }
 
 function gameOver(){
@@ -88,12 +89,23 @@ function tick(){
   if((nextDir.x!==-dir.x||nextDir.y!==-dir.y)||snake.length===1) dir=nextDir;
   const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y,color:snake[0].color};
 
-  // wrap
-  head.x=(head.x+COLS)%COLS;
-  head.y=(head.y+ROWS)%ROWS;
+  // Wall collision
+  if(head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS){ 
+    gameOver(); 
+    return; 
+  }
 
-  if(snake.some(s=>s.x===head.x&&s.y===head.y)&&!invincible){ gameOver(); return; }
-  if(obstacles.some(o=>o.x===head.x&&o.y===head.y)&&!invincible){ gameOver(); return; }
+  // Self collision
+  if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ 
+    gameOver(); 
+    return; 
+  }
+
+  // Obstacle collision
+  if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ 
+    gameOver(); 
+    return; 
+  }
 
   snake.unshift(head);
 
@@ -102,11 +114,11 @@ function tick(){
   if(head.x===food.x && head.y===food.y){
     if(head.color===food.color){
       score += 10; 
-      points += 10;                // gain points on correct food
+      points += 10;
       snake[0].color = food.color;
     } else { 
       score = Math.max(0,score-5); 
-      points = Math.max(0,points-5); // lose points on wrong food
+      points = Math.max(0,points-5);
       snake.pop(); 
     }
     if(Math.random() < 0.1){ invincible = true; invTimer = 50; }
@@ -161,7 +173,6 @@ function updatePoints(){
 }
 
 startBtn.addEventListener('click',()=>{
-  menu.style.display='none';
   startGame();
 });
 
