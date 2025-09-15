@@ -35,7 +35,7 @@ class Player {
     this.velY = 0;
     this.radius = 20;
     this.shootTime = 0; // timestamp when last shot
-    this.shootDuration = 100000; // 0.5 seconds
+    this.shootDuration = 10000; // 0.5 seconds
   }
   update() {
     if(keys['ArrowLeft']) this.angle -= 0.05;
