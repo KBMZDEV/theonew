@@ -10,6 +10,8 @@
   .menu{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:rgba(0,0,0,0.85);}
   .menu button{padding:10px 20px;font-size:18px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;}
   .menu .points{margin-top:20px;font-size:16px;}
+  #caseAnimation{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);}
+  #caseCanvas{background:#111;border:2px solid #fff;border-radius:6px;}
 </style>
 </head>
 <body>
@@ -22,6 +24,10 @@
   <div class="points" id="skinDisplay">Current Skin: White</div>
 </div>
 
+<div id="caseAnimation">
+  <canvas id="caseCanvas" width="400" height="100"></canvas>
+</div>
+
 <script>
 (() => {
 const canvas=document.getElementById('game');
@@ -31,6 +37,9 @@ const startBtn=document.getElementById('startBtn');
 const casesBtn=document.getElementById('casesBtn');
 const pointsDisplay=document.getElementById('pointsDisplay');
 const skinDisplay=document.getElementById('skinDisplay');
+const caseOverlay=document.getElementById('caseAnimation');
+const caseCanvas=document.getElementById('caseCanvas');
+const caseCtx=caseCanvas.getContext('2d');
 
 const CELL=15, COLS=canvas.width/CELL, ROWS=canvas.height/CELL;
 const MOVE_INTERVAL=120;
@@ -44,9 +53,7 @@ let ownedSkins=['white'];
 const colors=['red','green','blue','yellow','cyan','magenta'];
 const rareColors=['orange','purple','lime','pink','gold'];
 
-function randPos(){
-  return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)};
-}
+function randPos(){ return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
 
 function placeFood(){
   let p;
@@ -88,42 +95,24 @@ function tick(){
   const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y,color:snake[0].color};
 
   // Wall collision
-  if(head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS){ 
-    gameOver(); 
-    return; 
-  }
+  if(head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS){ gameOver(); return; }
 
   // Self collision
-  if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ 
-    gameOver(); 
-    return; 
-  }
+  if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ gameOver(); return; }
 
   // Obstacle collision
-  if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ 
-    gameOver(); 
-    return; 
-  }
+  if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ gameOver(); return; }
 
   snake.unshift(head);
 
   if(food.moving){ food.x+=food.dir; if(food.x<0||food.x>=COLS) food.dir*=-1; }
 
   if(head.x===food.x && head.y===food.y){
-    // always gain points when eating
     points += 10;
-
-    if(head.color===food.color){
-      score += 10;
-      snake[0].color = food.color;
-    } else { 
-      score = Math.max(0,score-5); 
-      points = Math.max(0,points-5); // lose points on wrong food
-      snake.pop(); 
-    }
-    if(Math.random() < 0.1){ invincible = true; invTimer = 50; }
-    placeFood();
-    updatePoints();
+    if(head.color===food.color){ score += 10; snake[0].color = food.color; }
+    else{ score = Math.max(0,score-5); points = Math.max(0,points-5); snake.pop(); }
+    if(Math.random()<0.1){ invincible=true; invTimer=50; }
+    placeFood(); updatePoints();
   } else snake.pop();
 
   if(invincible){ invTimer--; if(invTimer<=0) invincible=false; }
@@ -171,23 +160,53 @@ function updatePoints(){
   skinDisplay.textContent='Current Skin: '+currentSkin; 
 }
 
-startBtn.addEventListener('click',()=>{
-  startGame();
-});
+startBtn.addEventListener('click',()=>{ startGame(); });
 
 casesBtn.addEventListener('click',()=>{
   if(points<5){ alert("Not enough points! Each case costs 5."); return; }
-  points -= 5;
+  points-=5;
   updatePoints();
+
+  // Decide the skin to get
   const roll=Math.random();
-  let newSkin;
-  if(roll<0.6) newSkin=colors[Math.floor(Math.random()*colors.length)];
-  else if(roll<0.95) newSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
-  else newSkin='gold';
-  ownedSkins.push(newSkin);
-  currentSkin=newSkin;
-  alert("You got a new skin: "+newSkin);
-  updatePoints();
+  let finalSkin;
+  if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
+  else if(roll<0.95) finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
+  else finalSkin='gold';
+  ownedSkins.push(finalSkin);
+
+  // Show case animation
+  caseOverlay.style.display='flex';
+  const scrollSkins=[...colors,...rareColors,'gold','red','green','blue','yellow'];
+  let offset=0;
+  let speed=20;
+  const targetIndex=scrollSkins.indexOf(finalSkin)+Math.floor(Math.random()*5); // make it scroll past a bit
+  let frames=0;
+
+  function animateCase(){
+    frames++;
+    caseCtx.fillStyle='#111';
+    caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
+
+    for(let i=0;i<scrollSkins.length;i++){
+      const x=(i*80-offset+caseCanvas.width/2)% (scrollSkins.length*80) - 80;
+      caseCtx.fillStyle=scrollSkins[i];
+      caseCtx.fillRect(x,20,70,60);
+    }
+
+    offset+=speed;
+    if(frames>100){ speed*=0.9; } // slow down
+    if(speed<0.5){
+      // stop animation
+      caseOverlay.style.display='none';
+      currentSkin=finalSkin;
+      updatePoints();
+      alert('You got a new skin: '+finalSkin);
+      return;
+    }
+    requestAnimationFrame(animateCase);
+  }
+  animateCase();
 });
 
 updatePoints();
