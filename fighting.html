@@ -82,6 +82,7 @@ function startGame(){
   timer=setInterval(tick,MOVE_INTERVAL);
   draw();
   menu.style.display='none';
+  canvas.focus(); // ensure controls work
 }
 
 function gameOver(){
@@ -151,13 +152,25 @@ skinSelect.addEventListener('change',(e)=>{
   draw();
 });
 
+// Controls
+window.addEventListener('keydown',(e)=>{
+  if(!running) return;
+  switch(e.key){
+    case 'ArrowUp': case 'w': case 'W': nextDir={x:0,y:-1}; break;
+    case 'ArrowDown': case 's': case 'S': nextDir={x:0,y:1}; break;
+    case 'ArrowLeft': case 'a': case 'A': nextDir={x:-1,y:0}; break;
+    case 'ArrowRight': case 'd': case 'D': nextDir={x:1,y:0}; break;
+  }
+});
+
+canvas.addEventListener('click',()=>{ canvas.focus(); });
+
 startBtn.addEventListener('click',()=>{ startGame(); });
 
 casesBtn.addEventListener('click',()=>{
   if(points<5){ alert("Not enough points! Each case costs 5."); return; }
   points-=5; updatePoints();
 
-  // Decide skin
   const roll=Math.random();
   let finalSkin;
   if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
@@ -165,7 +178,6 @@ casesBtn.addEventListener('click',()=>{
   else finalSkin='gold';
   ownedSkins.push(finalSkin);
 
-  // Case animation
   caseOverlay.style.display='flex';
   const scrollSkins=[...colors,...rareColors,'gold','red','green','blue','yellow'];
   let offset=0, speed=20, frames=0;
@@ -176,7 +188,7 @@ casesBtn.addEventListener('click',()=>{
     caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
 
     for(let i=0;i<scrollSkins.length;i++){
-      const x=(i*80-offset+caseCanvas.width/2)% (scrollSkins.length*80) - 80;
+      const x=(i*80-offset+caseCanvas.width/2)%(scrollSkins.length*80)-80;
       caseCtx.fillStyle=scrollSkins[i];
       caseCtx.fillRect(x,20,70,60);
     }
