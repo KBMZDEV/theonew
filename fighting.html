@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Color-Chaser Snake — Chromebook</title>
 <style>
-  :root{--bg:#000;--fg:#fff;--box:#111}
+  :root{--bg:#000;--fg:#fff;}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;align-items:center;overflow:hidden;}
   canvas{background:#111;border:2px solid #fff;border-radius:6px;display:block;}
   .menu{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:rgba(0,0,0,0.85);}
@@ -52,44 +52,61 @@ let timer, running=false, score=0, points=0;
 let obstacles=[], invincible=false, invTimer=0;
 let currentSkin='white';
 let ownedSkins=['white'];
-const colors=['red','green','blue','yellow','cyan','magenta'];
-const rareColors=['orange','purple','lime','pink','gold'];
 
-function randPos(){ return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
+// Skins by rarity
+const rarities = {
+  Common: ['red','green','blue','yellow','cyan','magenta'],
+  Rare: ['orange','purple','lime','pink'],
+  Epic: ['gold','silver'],
+  Legendary: ['rainbow']
+};
 
-function placeFood(){
-  let p;
-  do { p=randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
-  food={...p,color:colors[Math.floor(Math.random()*colors.length)],moving:Math.random()<0.2,dir:Math.random()<0.5?1:-1};
+// Rarity colors for UI (optional)
+const rarityColors = {
+  Common:'#aaa',
+  Rare:'#4fa3ff',
+  Epic:'#b347ff',
+  Legendary:'#ffcc00'
+};
+
+// Utility pick function
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// Roll skin by rarity
+function rollSkin(){
+  const roll = Math.random();
+  if(roll<0.6) return {rarity:"Common", skin:pick(rarities.Common)};
+  if(roll<0.9) return {rarity:"Rare", skin:pick(rarities.Rare)};
+  if(roll<0.99) return {rarity:"Epic", skin:pick(rarities.Epic)};
+  return {rarity:"Legendary", skin:pick(rarities.Legendary)};
 }
 
+function randPos(){ return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
+function placeFood(){
+  let p; do { p=randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
+  food={...p,color:pick(rarities.Common),moving:Math.random()<0.2,dir:Math.random()<0.5?1:-1};
+}
 function placeObstacles(count=5){
   obstacles=[];
   for(let i=0;i<count;i++){
-    let p;
-    do{p=randPos();}while(snake.some(s=>s.x===p.x && s.y===p.y)||obstacles.some(o=>o.x===p.x&&o.y===p.y));
+    let p; do{p=randPos();}while(snake.some(s=>s.x===p.x && s.y===p.y)||obstacles.some(o=>o.x===p.x&&o.y===p.y));
     obstacles.push(p);
   }
 }
 
 function startGame(){
   snake=[{x:10,y:10,color:currentSkin},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
-  dir={x:1,y:0}; nextDir=dir;
-  score=0; invincible=false; invTimer=0;
+  dir={x:1,y:0}; nextDir=dir; score=0; invincible=false; invTimer=0;
   obstacles=[]; placeObstacles(); placeFood();
-  running=true;
-  if(timer) clearInterval(timer);
+  running=true; if(timer) clearInterval(timer);
   timer=setInterval(tick,MOVE_INTERVAL);
   draw();
   menu.style.display='none';
-  canvas.focus(); // ensure controls work
 }
 
 function gameOver(){
-  running=false;
-  if(timer){ clearInterval(timer); timer=null; }
-  ctx.fillStyle='rgba(255,255,255,0.1)';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  running=false; if(timer){ clearInterval(timer); timer=null; }
+  ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.fillRect(0,0,canvas.width,canvas.height);
   menu.style.display='flex';
 }
 
@@ -97,7 +114,7 @@ function tick(){
   if((nextDir.x!==-dir.x||nextDir.y!==-dir.y)||snake.length===1) dir=nextDir;
   const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y,color:snake[0].color};
 
-  if(head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS){ gameOver(); return; }
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS){ gameOver(); return; }
   if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ gameOver(); return; }
   if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ gameOver(); return; }
 
@@ -105,9 +122,9 @@ function tick(){
   if(food.moving){ food.x+=food.dir; if(food.x<0||food.x>=COLS) food.dir*=-1; }
 
   if(head.x===food.x && head.y===food.y){
-    points += 10;
-    if(head.color===food.color){ score += 10; snake[0].color = food.color; }
-    else{ score = Math.max(0,score-5); points = Math.max(0,points-5); snake.pop(); }
+    points+=10;
+    if(head.color===food.color){ score+=10; snake[0].color=food.color; }
+    else{ score=Math.max(0,score-5); points=Math.max(0,points-5); snake.pop(); }
     if(Math.random()<0.1){ invincible=true; invTimer=50; }
     placeFood(); updatePoints();
   } else snake.pop();
@@ -118,15 +135,13 @@ function tick(){
 function draw(){
   ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle='#555'; obstacles.forEach(o=>ctx.fillRect(o.x*CELL+2,o.y*CELL+2,CELL-4,CELL-4));
-  ctx.fillStyle=invincible?'gold':food.color;
-  ctx.fillRect(food.x*CELL+2,food.y*CELL+2,CELL-4,CELL-4);
+  ctx.fillStyle=invincible?'gold':food.color; ctx.fillRect(food.x*CELL+2,food.y*CELL+2,CELL-4,CELL-4);
   for(let i=0;i<snake.length;i++){
     const s=snake[i];
     ctx.fillStyle=i===0?currentSkin:`rgb(${220-i*10},${220-i*10},${220-i*10})`;
     ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
   }
-  ctx.fillStyle='white';
-  ctx.font='16px Arial';
+  ctx.fillStyle='white'; ctx.font='16px Arial';
   ctx.fillText('Points: '+points,10,20);
 }
 
@@ -152,15 +167,12 @@ skinSelect.addEventListener('change',(e)=>{
   draw();
 });
 
-// Controls
 window.addEventListener('keydown',(e)=>{
   if(!running) return;
-  switch(e.key){
-    case 'ArrowUp': case 'w': case 'W': nextDir={x:0,y:-1}; break;
-    case 'ArrowDown': case 's': case 'S': nextDir={x:0,y:1}; break;
-    case 'ArrowLeft': case 'a': case 'A': nextDir={x:-1,y:0}; break;
-    case 'ArrowRight': case 'd': case 'D': nextDir={x:1,y:0}; break;
-  }
+  if(['ArrowUp','w','W'].includes(e.key)) nextDir={x:0,y:-1};
+  if(['ArrowDown','s','S'].includes(e.key)) nextDir={x:0,y:1};
+  if(['ArrowLeft','a','A'].includes(e.key)) nextDir={x:-1,y:0};
+  if(['ArrowRight','d','D'].includes(e.key)) nextDir={x:1,y:0};
 });
 
 canvas.addEventListener('click',()=>{ canvas.focus(); });
@@ -171,16 +183,23 @@ casesBtn.addEventListener('click',()=>{
   if(points<5){ alert("Not enough points! Each case costs 5."); return; }
   points-=5; updatePoints();
 
-  const roll=Math.random();
-  let finalSkin;
-  if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
-  else if(roll<0.95) finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
-  else finalSkin='gold';
+  const result = rollSkin();
+  const finalSkin = result.skin;
+  const rarity = result.rarity;
   ownedSkins.push(finalSkin);
 
+  // Case animation
   caseOverlay.style.display='flex';
-  const scrollSkins=[...colors,...rareColors,'gold','red','green','blue','yellow'];
+  const scrollSkins = [...rarities.Common,...rarities.Rare,...rarities.Epic,...rarities.Legendary];
   let offset=0, speed=20, frames=0;
+
+  function createRainbow(ctx){
+    const grad = ctx.createLinearGradient(0,0,70,0);
+    grad.addColorStop(0,'red'); grad.addColorStop(0.2,'orange');
+    grad.addColorStop(0.4,'yellow'); grad.addColorStop(0.6,'green');
+    grad.addColorStop(0.8,'blue'); grad.addColorStop(1,'violet');
+    return grad;
+  }
 
   function animateCase(){
     frames++;
@@ -188,8 +207,8 @@ casesBtn.addEventListener('click',()=>{
     caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
 
     for(let i=0;i<scrollSkins.length;i++){
-      const x=(i*80-offset+caseCanvas.width/2)%(scrollSkins.length*80)-80;
-      caseCtx.fillStyle=scrollSkins[i];
+      const x=(i*80-offset+caseCanvas.width/2) % (scrollSkins.length*80) - 80;
+      caseCtx.fillStyle=scrollSkins[i]==='rainbow' ? createRainbow(caseCtx) : scrollSkins[i];
       caseCtx.fillRect(x,20,70,60);
     }
 
@@ -197,18 +216,4 @@ casesBtn.addEventListener('click',()=>{
     if(frames>100){ speed*=0.9; }
     if(speed<0.5){
       caseOverlay.style.display='none';
-      currentSkin=finalSkin;
-      updatePoints();
-      alert('You got a new skin: '+finalSkin);
-      return;
-    }
-    requestAnimationFrame(animateCase);
-  }
-  animateCase();
-});
-
-updatePoints();
-})();
-</script>
-</body>
-</html>
+     
