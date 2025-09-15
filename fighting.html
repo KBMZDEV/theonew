@@ -13,6 +13,8 @@
   #skinSelect{margin-top:10px;padding:5px;font-size:16px;border-radius:6px;border:1px solid #fff;background:#000;color:#fff;}
   #caseAnimation{position:absolute;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);}
   #caseCanvas{background:#111;border:2px solid #fff;border-radius:6px;}
+  #caseMessage{position:absolute;top:40%;left:50%;transform:translate(-50%, -50%);
+               font-size:36px;font-weight:bold;display:none;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -28,38 +30,29 @@
 
 <div id="caseAnimation">
   <canvas id="caseCanvas" width="400" height="100"></canvas>
+  <div id="caseMessage"></div>
 </div>
 
 <script>
 (() => {
-const canvas=document.getElementById('game');
-const ctx=canvas.getContext('2d');
-const menu=document.getElementById('menu');
-const startBtn=document.getElementById('startBtn');
-const casesBtn=document.getElementById('casesBtn');
-const pointsDisplay=document.getElementById('pointsDisplay');
-const skinSelect=document.getElementById('skinSelect');
-const caseOverlay=document.getElementById('caseAnimation');
-const caseCanvas=document.getElementById('caseCanvas');
-const caseCtx=caseCanvas.getContext('2d');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const menu = document.getElementById('menu');
+const startBtn = document.getElementById('startBtn');
+const casesBtn = document.getElementById('casesBtn');
+const pointsDisplay = document.getElementById('pointsDisplay');
+const skinSelect = document.getElementById('skinSelect');
+const caseOverlay = document.getElementById('caseAnimation');
+const caseCanvas = document.getElementById('caseCanvas');
+const caseCtx = caseCanvas.getContext('2d');
+const caseMessage = document.getElementById('caseMessage');
 
-// Win message overlay
-const winMessageOverlay = document.createElement('div');
-winMessageOverlay.style.position = 'absolute';
-winMessageOverlay.style.top = '20%';
-winMessageOverlay.style.width = '100%';
-winMessageOverlay.style.textAlign = 'center';
-winMessageOverlay.style.fontSize = '32px';
-winMessageOverlay.style.fontWeight = 'bold';
-winMessageOverlay.style.display = 'none';
-document.body.appendChild(winMessageOverlay);
-
-const CELL=15, COLS=canvas.width/CELL, ROWS=canvas.height/CELL;
-const MOVE_INTERVAL=120;
+const CELL = 15, COLS = canvas.width/CELL, ROWS = canvas.height/CELL;
+const MOVE_INTERVAL = 120;
 
 let snake=[], dir={x:1,y:0}, nextDir={x:1,y:0};
 let food={x:0,y:0,color:'red',moving:false,dir:1};
-let timer, running=false, score=0, points=0;
+let timer, running=false, points=0;
 let obstacles=[], invincible=false, invTimer=0;
 let currentSkin='white';
 let ownedSkins=['white'];
@@ -86,11 +79,10 @@ function placeObstacles(count=5){
 function startGame(){
   snake=[{x:10,y:10,color:currentSkin},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
   dir={x:1,y:0}; nextDir=dir;
-  score=0; invincible=false; invTimer=0;
   obstacles=[]; placeObstacles(); placeFood();
-  running=true;
+  running=true; invincible=false; invTimer=0;
   if(timer) clearInterval(timer);
-  timer=setInterval(tick,MOVE_INTERVAL);
+  timer = setInterval(tick, MOVE_INTERVAL);
   draw();
   menu.style.display='none';
 }
@@ -116,8 +108,8 @@ function tick(){
 
   if(head.x===food.x && head.y===food.y){
     points += 10;
-    if(head.color===food.color){ score += 10; snake[0].color = food.color; }
-    else{ score = Math.max(0,score-5); points = Math.max(0,points-5); snake.pop(); }
+    if(head.color===food.color){} 
+    else{ points = Math.max(0, points-5); snake.pop(); }
     if(Math.random()<0.1){ invincible=true; invTimer=50; }
     placeFood(); updatePoints();
   } else snake.pop();
@@ -156,7 +148,6 @@ function updateSkinSelect(){
   });
 }
 
-// Change skin immediately on selection
 skinSelect.addEventListener('change',(e)=>{
   currentSkin=e.target.value;
   draw();
@@ -165,22 +156,14 @@ skinSelect.addEventListener('change',(e)=>{
 startBtn.addEventListener('click',()=>{ startGame(); });
 
 casesBtn.addEventListener('click',()=>{
-  if(points<5){ 
-    winMessageOverlay.textContent='Not enough points!';
-    winMessageOverlay.style.color='white';
-    winMessageOverlay.style.display='block';
-    setTimeout(()=>{winMessageOverlay.style.display='none';},2000);
-    return; 
-  }
-  points-=5; updatePoints();
+  if(points<5){ alert("Not enough points! Each case costs 5."); return; }
+  points -= 5; updatePoints();
 
-  // Decide skin and rarity
-  const roll=Math.random();
-  let finalSkin, rarity;
-  if(roll<0.6){ finalSkin=colors[Math.floor(Math.random()*colors.length)]; rarity='Common'; }
-  else if(roll<0.95){ finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)]; rarity='Rare'; }
-  else{ finalSkin='gold'; rarity='Legendary'; }
-
+  const roll = Math.random();
+  let finalSkin;
+  if(roll<0.6) finalSkin=colors[Math.floor(Math.random()*colors.length)];
+  else if(roll<0.95) finalSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
+  else finalSkin='gold';
   ownedSkins.push(finalSkin);
 
   // Case animation
@@ -194,24 +177,26 @@ casesBtn.addEventListener('click',()=>{
     caseCtx.fillRect(0,0,caseCanvas.width,caseCanvas.height);
 
     for(let i=0;i<scrollSkins.length;i++){
-      const x=(i*80-offset+caseCanvas.width/2)%(scrollSkins.length*80) - 80;
+      const x=(i*80-offset+caseCanvas.width/2)% (scrollSkins.length*80) - 80;
       caseCtx.fillStyle=scrollSkins[i];
       caseCtx.fillRect(x,20,70,60);
     }
 
-    offset+=speed;
-    if(frames>100){ speed*=0.9; }
-    if(speed<0.5){
-      caseOverlay.style.display='none';
-      currentSkin=finalSkin;
-      updatePoints();
+    offset += speed;
+    if(frames>100) speed *= 0.9;
+    if(speed < 0.5){
+      // Show big text before menu
+      caseMessage.style.color = finalSkin;
+      caseMessage.textContent = 'YOU GOT: ' + finalSkin.toUpperCase();
+      caseMessage.style.display = 'block';
 
-      // Show big win message above animation
-      winMessageOverlay.textContent = `You got a ${rarity} skin: ${finalSkin}!`;
-      winMessageOverlay.style.color = finalSkin;
-      winMessageOverlay.style.display = 'block';
-      setTimeout(()=>{winMessageOverlay.style.display='none';},3000);
-
+      setTimeout(() => {
+        caseOverlay.style.display='none';
+        caseMessage.style.display='none';
+        currentSkin = finalSkin;
+        updatePoints();
+        menu.style.display='flex';
+      }, 1500);
       return;
     }
     requestAnimationFrame(animateCase);
@@ -220,17 +205,6 @@ casesBtn.addEventListener('click',()=>{
 });
 
 updatePoints();
-
-window.addEventListener('keydown',(e)=>{
-  const k=e.key;
-  if(!running) return;
-  if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
-  else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
-  else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
-  else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
-});
-
-canvas.addEventListener('click',()=>{ canvas.focus(); });
 })();
 </script>
 </body>
