@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Top-Down Layered World</title>
+<title>Top-Down Island</title>
 <style>
   body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
   canvas { display: block; background: #87CEEB; }
@@ -29,28 +29,39 @@ const worldHeight = 50;
 // Layers
 const groundLayer = [];
 const objectLayer = [];
-const itemLayer = []; // player-placed blocks or pickups
+const itemLayer = [];
 
 // Block types/colors
-const blockColors = { grass:'#228B22', dirt:'#8B4513', stone:'#808080', tree:'#006400' };
+const blockColors = { grass:'#228B22', dirt:'#8B4513', stone:'#808080', tree:'#006400', water:'#1E90FF', sand:'#FFF5BA' };
 
-// Generate layers
+// Island generation using distance from center
+const centerX = worldWidth/2;
+const centerY = worldHeight/2;
+const maxDistance = Math.sqrt(centerX**2 + centerY**2);
+
 for(let y=0;y<worldHeight;y++){
   groundLayer[y]=[];
   objectLayer[y]=[];
   itemLayer[y]=[];
   for(let x=0;x<worldWidth;x++){
-    // Ground layer
-    const r = Math.random();
-    if(r<0.1) groundLayer[y][x]='stone';
-    else if(r<0.4) groundLayer[y][x]='dirt';
-    else groundLayer[y][x]='grass';
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const distance = Math.sqrt(dx*dx + dy*dy)/maxDistance; // 0=center, 1=edge
     
+    if(distance>0.85) groundLayer[y][x]='water';
+    else if(distance>0.75) groundLayer[y][x]='sand';
+    else{
+      const r = Math.random();
+      if(r<0.1) groundLayer[y][x]='stone';
+      else if(r<0.4) groundLayer[y][x]='dirt';
+      else groundLayer[y][x]='grass';
+    }
+
     // Object layer
     if(Math.random()<0.05 && groundLayer[y][x]==='grass') objectLayer[y][x]='tree';
     else objectLayer[y][x]=null;
 
-    // Item layer empty initially
+    // Item layer empty
     itemLayer[y][x]=null;
   }
 }
@@ -93,11 +104,10 @@ canvas.addEventListener('mousedown', e=>{
 
   if(e.button===0){ // mine
     let minedBlock = null;
-    // Prioritize topmost layer
     if(itemLayer[tileY]?.[tileX]) { minedBlock=itemLayer[tileY][tileX]; itemLayer[tileY][tileX]=null; }
     else if(objectLayer[tileY]?.[tileX]) { minedBlock=objectLayer[tileY][tileX]; objectLayer[tileY][tileX]=null; }
-    else if(groundLayer[tileY]?.[tileX]) { minedBlock=groundLayer[tileY][tileX]; groundLayer[tileY][tileX]=null; }
-    
+    else if(groundLayer[tileY]?.[tileX] && groundLayer[tileY][tileX]!=='water') { minedBlock=groundLayer[tileY][tileX]; groundLayer[tileY][tileX]='sand'; }
+
     if(minedBlock){
       const slotIndex = Object.keys(inventory).length<inventorySize ? Object.keys(inventory).length : selectedSlot;
       inventory[slotIndex] = minedBlock;
@@ -106,7 +116,7 @@ canvas.addEventListener('mousedown', e=>{
 
   } else if(e.button===2){ // place
     const block = inventory[selectedSlot];
-    if(block && itemLayer[tileY]?.[tileX]===null){
+    if(block && itemLayer[tileY]?.[tileX]===null && groundLayer[tileY][tileX]!=='water'){
       itemLayer[tileY][tileX]=block;
       inventory[selectedSlot]=null;
       updateInventory();
@@ -117,7 +127,6 @@ canvas.oncontextmenu = e=>e.preventDefault();
 
 // Game loop
 function update(){
-  // Move player
   let dx=0, dy=0;
   if(keys['w']) dy=-player.speed;
   if(keys['s']) dy=player.speed;
@@ -153,24 +162,10 @@ function draw(){
       const drawX = x*tileSize - camera.x;
       const drawY = y*tileSize - camera.y;
 
-      // Draw layers bottom->top
-      if(groundLayer[y]?.[x]) {
-        ctx.fillStyle = blockColors[groundLayer[y][x]];
-        ctx.fillRect(drawX, drawY, tileSize, tileSize);
-        ctx.strokeRect(drawX, drawY, tileSize, tileSize);
-      }
-
-      if(objectLayer[y]?.[x]) {
-        ctx.fillStyle = blockColors[objectLayer[y][x]];
-        ctx.fillRect(drawX, drawY, tileSize, tileSize);
-        ctx.strokeRect(drawX, drawY, tileSize, tileSize);
-      }
-
-      if(itemLayer[y]?.[x]) {
-        ctx.fillStyle = blockColors[itemLayer[y][x]];
-        ctx.fillRect(drawX, drawY, tileSize, tileSize);
-        ctx.strokeRect(drawX, drawY, tileSize, tileSize);
-      }
+      // Draw layers
+      if(groundLayer[y]?.[x]) { ctx.fillStyle = blockColors[groundLayer[y][x]]; ctx.fillRect(drawX, drawY, tileSize, tileSize); ctx.strokeRect(drawX, drawY, tileSize, tileSize); }
+      if(objectLayer[y]?.[x]) { ctx.fillStyle = blockColors[objectLayer[y][x]]; ctx.fillRect(drawX, drawY, tileSize, tileSize); ctx.strokeRect(drawX, drawY, tileSize, tileSize); }
+      if(itemLayer[y]?.[x]) { ctx.fillStyle = blockColors[itemLayer[y][x]]; ctx.fillRect(drawX, drawY, tileSize, tileSize); ctx.strokeRect(drawX, drawY, tileSize, tileSize); }
     }
   }
 
