@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Dungeon Crawler - Sword Combat</title>
+<title>Doom Dungeon Crawler - Sword Combat</title>
 <style>
   body { margin: 0; overflow: hidden; background: black; }
   canvas { display: block; }
@@ -21,87 +21,96 @@ const tileSize = 64;
 const mapWidth = 20;
 const mapHeight = 15;
 
-// Dungeon generator
+// Map generation
 const map = [];
 for (let y = 0; y < mapHeight; y++) {
   map[y] = [];
   for (let x = 0; x < mapWidth; x++) map[y][x] = 1;
 }
-function createRoom(x, y, w, h) {
-  for (let i = y; i < y + h; i++)
-    for (let j = x; j < x + w; j++)
-      if (i > 0 && i < mapHeight && j > 0 && j < mapWidth) map[i][j] = 0;
-}
-createRoom(1,1,6,5);
-createRoom(10,2,5,6);
-createRoom(5,9,8,4);
-function createCorridor(x1,y1,x2,y2){
-  while(x1!==x2){ map[y1][x1]=0; x1 += x1<x2?1:-1; }
-  while(y1!==y2){ map[y1][x1]=0; y1 += y1<y2?1:-1; }
-}
-createCorridor(3,3,12,4);
-createCorridor(12,4,7,10);
 
-let player = {x:tileSize*2, y:tileSize*2, angle:0, speed:1.2};
+// Random rooms
+function createRoom(w,h){
+  const x = Math.floor(Math.random()*(mapWidth-w-1))+1;
+  const y = Math.floor(Math.random()*(mapHeight-h-1))+1;
+  for(let i=y;i<y+h;i++)
+    for(let j=x;j<x+w;j++)
+      map[i][j]=0;
+  return {x:x+Math.floor(w/2), y:y+Math.floor(h/2)}; // room center
+}
 
+const roomCenters = [];
+for(let i=0;i<4;i++) roomCenters.push(createRoom(3+Math.floor(Math.random()*4),3+Math.floor(Math.random()*4)));
+
+// Connect rooms
+function createCorridor(a,b){
+  let x=a.x, y=a.y;
+  while(x!==b.x){ map[y][x]=0; x+=x<b.x?1:-1; }
+  while(y!==b.y){ map[y][x]=0; y+=y<b.y?1:-1; }
+}
+for(let i=0;i<roomCenters.length-1;i++) createCorridor(roomCenters[i], roomCenters[i+1]);
+
+// Player
+let player = {x:roomCenters[0].x*tileSize, y:roomCenters[0].y*tileSize, angle:0, speed:1.2};
+
+// Controls
 const keys={};
 document.addEventListener('keydown',e=>keys[e.key]=true);
 document.addEventListener('keyup',e=>keys[e.key]=false);
 
 // Enemies
-const enemies = [
-  {x: tileSize*5, y: tileSize*3, hp:3},
-  {x: tileSize*12, y: tileSize*5, hp:3},
-  {x: tileSize*7, y: tileSize*11, hp:3},
-];
+const enemies = [];
+for(let i=1;i<roomCenters.length;i++){
+  enemies.push({x:roomCenters[i].x*tileSize, y:roomCenters[i].y*tileSize, hp:3});
+}
 
-// Player attack
-let swordCooldown = 0;
-
-document.addEventListener('keydown', e=>{
-  if(e.key===' ' && swordCooldown <=0){ // space = attack
-    swordCooldown = 20; // cooldown frames
-    // check enemies in front
-    const range = 80;
+// Sword
+let swordCooldown=0;
+document.addEventListener('keydown',e=>{
+  if(e.key===' ' && swordCooldown<=0){
+    swordCooldown=20;
+    const range=80;
     enemies.forEach(enemy=>{
-      const dx = enemy.x - player.x;
-      const dy = enemy.y - player.y;
-      const dist = Math.hypot(dx,dy);
-      const angleToEnemy = Math.atan2(dy,dx);
-      let diff = angleToEnemy - player.angle;
-      diff = Math.atan2(Math.sin(diff),Math.cos(diff)); // normalize angle
-      if(dist < range && Math.abs(diff) < Math.PI/6){
-        enemy.hp -=1;
-      }
+      const dx=enemy.x-player.x;
+      const dy=enemy.y-player.y;
+      const dist=Math.hypot(dx,dy);
+      const angleToEnemy=Math.atan2(dy,dx);
+      let diff=angleToEnemy-player.angle;
+      diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+      if(dist<range && Math.abs(diff)<Math.PI/6) enemy.hp-=1;
     });
   }
 });
 
 function movePlayer(){
-  let newX = player.x;
-  let newY = player.y;
+  let newX=player.x;
+  let newY=player.y;
   if(keys['ArrowUp']){ newX+=Math.cos(player.angle)*player.speed; newY+=Math.sin(player.angle)*player.speed; }
   if(keys['ArrowDown']){ newX-=Math.cos(player.angle)*player.speed; newY-=Math.sin(player.angle)*player.speed; }
-  if(keys['ArrowLeft']) player.angle -= 0.04;
-  if(keys['ArrowRight']) player.angle += 0.04;
-  const left = Math.floor(newX/tileSize), top=Math.floor(newY/tileSize);
+  if(keys['ArrowLeft']) player.angle-=0.04;
+  if(keys['ArrowRight']) player.angle+=0.04;
+
+  const left=Math.floor(newX/tileSize), top=Math.floor(newY/tileSize);
   if(map[top] && map[top][left]===0){ player.x=newX; player.y=newY; }
 }
 
+// Raycasting for walls
 function castRays(){
   const fov=Math.PI*2/3;
   const numRays=300;
   const rayWidth=canvas.width/numRays;
+
   for(let i=0;i<numRays;i++){
     const rayAngle=(player.angle-fov/2)+(i/numRays)*fov;
     let distance=0; let hit=false;
     const sin=Math.sin(rayAngle), cos=Math.cos(rayAngle);
+
     while(!hit && distance<800){
       distance+=1;
       const testX=Math.floor((player.x+cos*distance)/tileSize);
       const testY=Math.floor((player.y+sin*distance)/tileSize);
       if(map[testY] && map[testY][testX]===1) hit=true;
     }
+
     let shade=255-Math.min(distance*0.5,200);
     ctx.fillStyle=`rgb(${shade},${shade},${shade})`;
     const wallHeight=(tileSize*300)/distance;
@@ -109,14 +118,9 @@ function castRays(){
   }
 }
 
-// Draw sword and enemies overlay
+// Draw enemies and sword
 function drawOverlay(){
-  // Sword
-  if(swordCooldown>10){ // swinging
-    ctx.fillStyle='silver';
-    ctx.fillRect(canvas.width/2,canvas.height*0.65,20,100);
-  }
-  // Enemies (simple red rectangles in front)
+  // Enemies visible through raycasting
   enemies.forEach(enemy=>{
     if(enemy.hp<=0) return;
     const dx=enemy.x-player.x;
@@ -125,17 +129,43 @@ function drawOverlay(){
     const angleToEnemy=Math.atan2(dy,dx);
     let diff=angleToEnemy-player.angle;
     diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+
     if(Math.abs(diff)<Math.PI/6 && dist>0){
-      const size=(tileSize*300)/dist;
-      const screenX=(canvas.width/2)+(diff/(Math.PI/3))*(canvas.width/2);
-      ctx.fillStyle='red';
-      ctx.fillRect(screenX-size/2,(canvas.height/2)-size/2,size,size);
+      // Raycast check for walls
+      let blocked=false;
+      const steps=Math.floor(dist);
+      for(let s=0;s<steps;s+=5){
+        const testX=Math.floor((player.x+Math.cos(player.angle)*s)/tileSize);
+        const testY=Math.floor((player.y+Math.sin(player.angle)*s)/tileSize);
+        if(map[testY] && map[testY][testX]===1){ blocked=true; break; }
+      }
+      if(!blocked){
+        const size=(tileSize*300)/dist; // size proportional
+        const screenX=(canvas.width/2)+(diff/(Math.PI/3))*(canvas.width/2);
+        ctx.fillStyle='red';
+        ctx.fillRect(screenX-size/4,(canvas.height/2)-size/2,size/2,size); // smaller enemy
+      }
     }
   });
+
+  // Sword swing
+  if(swordCooldown>10){
+    const swingProgress=(20-swordCooldown)/10; // 0 to 1
+    const swordLength=120;
+    const swordWidth=20;
+    const angleOffset=(Math.PI/4)*(1-swingProgress);
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height*0.75);
+    ctx.rotate(-angleOffset);
+    const grad=ctx.createLinearGradient(0,0,swordWidth,-swordLength);
+    grad.addColorStop(0,'silver'); grad.addColorStop(1,'white');
+    ctx.fillStyle=grad;
+    ctx.fillRect(-swordWidth/2, -swordLength, swordWidth, swordLength);
+    ctx.restore();
+  }
 }
 
 function gameLoop(){
-  // Floor and ceiling
   ctx.fillStyle='rgb(70,70,70)'; ctx.fillRect(0,0,canvas.width,canvas.height/2);
   ctx.fillStyle='rgb(50,50,50)'; ctx.fillRect(0,canvas.height/2,canvas.width,canvas.height/2);
 
