@@ -3,26 +3,49 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Side-Scroll Platformer</title>
+<title>Mini Minecraft/Terraria</title>
 <style>
   body {
     margin: 0;
     overflow: hidden;
     background: linear-gradient(#87CEEB, #228B22);
+    font-family: sans-serif;
   }
   canvas {
     display: block;
     background: #87CEEB;
   }
+  #inventory {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    gap: 5px;
+  }
+  .slot {
+    width: 40px;
+    height: 40px;
+    border: 2px solid white;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+  }
+  .selected {
+    border-color: yellow;
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="inventory"></div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
@@ -30,78 +53,143 @@ const tileSize = 40;
 const worldWidth = 50;
 const worldHeight = 15;
 
-// Generate terrain (simple)
+const blockTypes = ['dirt','stone','grass'];
+const blockColors = {
+  'dirt':'#8B4513',
+  'stone':'#808080',
+  'grass':'#228B22'
+};
+
+// Terrain generation
 const world = [];
-for(let y=0; y<worldHeight; y++){
-  world[y] = [];
-  for(let x=0; x<worldWidth; x++){
-    if(y > worldHeight-3) world[y][x] = 'grass';
-    else world[y][x] = null;
+for(let y=0;y<worldHeight;y++){
+  world[y]=[];
+  for(let x=0;x<worldWidth;x++){
+    if(y === worldHeight-1) world[y][x]='grass';
+    else if(y>worldHeight-4) world[y][x]='dirt';
+    else world[y][x]='stone';
   }
 }
 
-// Player object
+// Player
 const player = {
   x: 100,
   y: canvas.height - tileSize*3,
   width: tileSize,
   height: tileSize*2,
-  color: 'red',
-  vx: 0,
-  vy: 0,
-  speed: 5,
-  jumpPower: 15,
-  onGround: false
+  color:'red',
+  vx:0,
+  vy:0,
+  speed:5,
+  jumpPower:15,
+  onGround:false
 };
+
+// Inventory
+let inventory = {};
+let selectedSlot = 0;
+const inventorySize = 5;
+const inventoryEl = document.getElementById('inventory');
+function updateInventory(){
+  inventoryEl.innerHTML='';
+  for(let i=0;i<inventorySize;i++){
+    const slot = document.createElement('div');
+    slot.className='slot';
+    if(i===selectedSlot) slot.classList.add('selected');
+    slot.textContent = inventory[i] || '';
+    slot.onclick = ()=>{ selectedSlot=i; updateInventory();}
+    inventoryEl.appendChild(slot);
+  }
+}
+updateInventory();
 
 // Controls
 const keys = {};
-document.addEventListener('keydown', (e)=>{ keys[e.key]=true; });
-document.addEventListener('keyup', (e)=>{ keys[e.key]=false; });
+document.addEventListener('keydown', e=>keys[e.key]=true);
+document.addEventListener('keyup', e=>keys[e.key]=false);
+
+// Mouse interaction
+canvas.addEventListener('mousedown', e=>{
+  const x = Math.floor(e.clientX/tileSize);
+  const y = Math.floor(e.clientY/tileSize);
+  if(e.button===0){ // left click = mine
+    const block = world[y]?.[x];
+    if(block){
+      // Add to inventory
+      const slotIndex = Object.keys(inventory).length<inventorySize ? Object.keys(inventory).length : selectedSlot;
+      inventory[slotIndex] = block;
+      world[y][x]=null;
+      updateInventory();
+    }
+  } else if(e.button===2){ // right click = place
+    const block = inventory[selectedSlot];
+    if(block && world[y]?.[x]===null){
+      world[y][x]=block;
+      inventory[selectedSlot]=null;
+      updateInventory();
+    }
+  }
+});
+canvas.oncontextmenu = e=>e.preventDefault(); // prevent context menu
 
 // Game loop
 function update(){
-  // Player movement
+  // Movement
+  player.vx = 0;
   if(keys['a']) player.vx = -player.speed;
-  else if(keys['d']) player.vx = player.speed;
-  else player.vx = 0;
-
-  // Jump
+  if(keys['d']) player.vx = player.speed;
   if(keys['w'] && player.onGround){
     player.vy = -player.jumpPower;
-    player.onGround = false;
+    player.onGround=false;
   }
 
   // Gravity
   player.vy += 0.8;
-
-  // Move player
   player.x += player.vx;
   player.y += player.vy;
 
-  // Collision with ground
-  const tileX = Math.floor(player.x / tileSize);
-  const tileY = Math.floor(player.y / tileSize);
-
-  if(tileY+2 >= worldHeight-2){
-    player.y = (worldHeight-2-player.height/tileSize)*tileSize;
-    player.vy = 0;
-    player.onGround = true;
+  // Simple collision with ground blocks
+  const playerBottom = player.y+player.height;
+  player.onGround=false;
+  for(let y=0;y<worldHeight;y++){
+    for(let x=0;x<worldWidth;x++){
+      const block = world[y][x];
+      if(block){
+        const bx = x*tileSize;
+        const by = y*tileSize;
+        if(player.x+player.width>bx && player.x<bx+tileSize &&
+           playerBottom>by && player.y<by+tileSize){
+          // Collision detected
+          if(player.vy>0){
+            player.y = by - player.height;
+            player.vy=0;
+            player.onGround=true;
+          } else if(player.vy<0){
+            player.y = by+tileSize;
+            player.vy=0;
+          }
+        }
+      }
+    }
   }
 
   draw();
   requestAnimationFrame(update);
 }
 
+// Draw function
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Draw tiles
+  // Draw world
   for(let y=0;y<worldHeight;y++){
     for(let x=0;x<worldWidth;x++){
-      if(world[y][x]==='grass'){
-        ctx.fillStyle = '#228B22';
-        ctx.fillRect(x*tileSize, y*tileSize + canvas.height - worldHeight*tileSize, tileSize, tileSize);
+      const block = world[y][x];
+      if(block){
+        ctx.fillStyle = blockColors[block];
+        ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
+        ctx.strokeStyle='black';
+        ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize);
       }
     }
   }
