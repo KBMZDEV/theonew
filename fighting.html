@@ -6,174 +6,161 @@ document.write(`
 <title>Color-Chaser Snake — Chromebook</title>
 <style>
   :root{--bg:#000;--fg:#fff;--box:#111}
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
-  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;box-sizing:border-box}
-  h1{margin:0;font-size:1.6rem}
-  .game-card{background:var(--box);border:2px solid var(--fg);padding:12px;border-radius:10px;display:inline-block}
-  .top-row{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:10px}
-  #score{font-weight:700}
-  canvas{display:block;background:#0b0b0b;border-radius:6px}
-  .controls{font-size:0.9rem;opacity:0.9;margin-top:8px}
-  button{background:transparent;color:var(--fg);border:1px solid var(--fg);padding:6px 10px;border-radius:6px;cursor:pointer}
-  button:active{transform:translateY(1px)}
-  .small{font-size:0.9rem;opacity:0.9}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;align-items:center;overflow:hidden;}
+  canvas{background:#111;border:2px solid #fff;border-radius:6px;display:block;}
+  .menu{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:rgba(0,0,0,0.85);}
+  .menu button{padding:10px 20px;font-size:18px;border-radius:6px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer;}
+  .menu .points{margin-top:20px;font-size:16px;}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Color-Chaser Snake</h1>
-    <div class="game-card" role="application" aria-label="Snake game">
-      <div class="top-row">
-        <div class="small">Score: <span id="score">0</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="restartBtn">Restart</button>
-          <div class="small" id="status">Playing</div>
-        </div>
-      </div>
-      <canvas id="game" width="300" height="300" tabindex="0"></canvas>
-      <div class="controls small">Controls: ↑↓←→ or WASD. Space = pause</div>
-    </div>
-    <div class="small" style="opacity:0.85">Tip: click the canvas then use the keys.</div>
-  </div>
+<canvas id="game" width="400" height="400" tabindex="0"></canvas>
+
+<div class="menu" id="menu">
+  <button id="startBtn">Start Game</button>
+  <button id="casesBtn">Open Case</button>
+  <div class="points" id="pointsDisplay">Points: 0</div>
+  <div class="points" id="skinDisplay">Current Skin: White</div>
+</div>
 
 <script>
 (() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const scoreEl = document.getElementById('score');
-  const statusEl = document.getElementById('status');
-  const restartBtn = document.getElementById('restartBtn');
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const menu=document.getElementById('menu');
+const startBtn=document.getElementById('startBtn');
+const casesBtn=document.getElementById('casesBtn');
+const pointsDisplay=document.getElementById('pointsDisplay');
+const skinDisplay=document.getElementById('skinDisplay');
 
-  const CELL_SIZE = 15;
-  const COLS = canvas.width / CELL_SIZE;
-  const ROWS = canvas.height / CELL_SIZE;
-  const MOVE_INTERVAL = 120;
-  const COLORS = ['red','green','blue','yellow','cyan','magenta'];
+const CELL=15, COLS=canvas.width/CELL, ROWS=canvas.height/CELL;
+const MOVE_INTERVAL=120;
 
-  let snake, dir, nextDir, food, timer, running, score, invincible, invTimer, obstacles, movingFood;
+let snake=[], dir={x:1,y:0}, nextDir={x:1,y:0};
+let food={x:0,y:0,color:'red',moving:false,dir:1};
+let timer, running=false, score=0, points=0;
+let obstacles=[], invincible=false, invTimer=0;
+let currentSkin='white';
+let ownedSkins=['white'];
+const colors=['red','green','blue','yellow','cyan','magenta'];
+const rareColors=['orange','purple','lime','pink','gold'];
 
-  function randPos() {
-    return { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
-  }
+function randPos(){
+  return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)};
+}
 
-  function placeFood() {
+function placeFood(){
+  let p;
+  do { p=randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
+  food={...p,color:colors[Math.floor(Math.random()*colors.length)],moving:Math.random()<0.2,dir:Math.random()<0.5?1:-1};
+}
+
+function placeObstacles(count=5){
+  obstacles=[];
+  for(let i=0;i<count;i++){
     let p;
-    do { p = randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
-    food = {...p, color: COLORS[Math.floor(Math.random()*COLORS.length)], moving: Math.random()<0.2, dir: Math.random()<0.5?1:-1};
+    do{p=randPos();}while(snake.some(s=>s.x===p.x && s.y===p.y)||obstacles.some(o=>o.x===p.x&&o.y===p.y));
+    obstacles.push(p);
   }
+}
 
-  function placeObstacles(count=5){
-    obstacles=[];
-    for(let i=0;i<count;i++){
-      let p;
-      do{ p=randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y) || obstacles.some(o=>o.x===p.x && o.y===p.y));
-      obstacles.push(p);
-    }
-  }
+function startGame(){
+  snake=[{x:10,y:10,color:currentSkin},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
+  dir={x:1,y:0}; nextDir=dir;
+  score=0; invincible=false; invTimer=0;
+  obstacles=[]; placeObstacles(); placeFood();
+  running=true;
+  if(timer) clearInterval(timer);
+  timer=setInterval(tick,MOVE_INTERVAL);
+  draw();
+}
 
-  function startGame(){
-    snake = [{x:10,y:10,color:COLORS[Math.floor(Math.random()*COLORS.length)]},{x:9,y:10,color:'#555'},{x:8,y:10,color:'#333'}];
-    dir={x:1,y:0}; nextDir=dir;
-    score=0; invincible=false; invTimer=0;
-    obstacles=[]; placeObstacles();
+function gameOver(){
+  running=false;
+  if(timer){ clearInterval(timer); timer=null; }
+  ctx.fillStyle='rgba(255,255,255,0.1)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  menu.style.display='flex';
+  points+=score; updatePoints();
+}
+
+function tick(){
+  if((nextDir.x!==-dir.x||nextDir.y!==-dir.y)||snake.length===1) dir=nextDir;
+  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y,color:snake[0].color};
+
+  // wrap
+  head.x=(head.x+COLS)%COLS;
+  head.y=(head.y+ROWS)%ROWS;
+
+  if(snake.some(s=>s.x===head.x&&s.y===head.y)&&!invincible){ gameOver(); return; }
+  if(obstacles.some(o=>o.x===head.x&&o.y===head.y)&&!invincible){ gameOver(); return; }
+
+  snake.unshift(head);
+
+  if(food.moving){ food.x+=food.dir; if(food.x<0||food.x>=COLS) food.dir*=-1; }
+
+  if(head.x===food.x&&head.y===food.y){
+    if(head.color===food.color){ score+=10; snake[0].color=food.color; }
+    else{ score=Math.max(0,score-5); snake.pop(); }
+    if(Math.random()<0.1){ invincible=true; invTimer=50; }
     placeFood();
-    running=true;
-    statusEl.textContent='Playing';
-    scoreEl.textContent=score;
-    if(timer) clearInterval(timer);
-    timer=setInterval(tick,MOVE_INTERVAL);
-    draw();
+  } else snake.pop();
+
+  if(invincible){ invTimer--; if(invTimer<=0) invincible=false; }
+  draw();
+}
+
+function draw(){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle='#555';
+  obstacles.forEach(o=>ctx.fillRect(o.x*CELL+2,o.y*CELL+2,CELL-4,CELL-4));
+
+  ctx.fillStyle=invincible?'gold':food.color;
+  ctx.fillRect(food.x*CELL+2,food.y*CELL+2,CELL-4,CELL-4);
+
+  for(let i=0;i<snake.length;i++){
+    const s=snake[i];
+    ctx.fillStyle=i===0?currentSkin:`rgb(${220-i*10},${220-i*10},${220-i*10})`;
+    ctx.fillRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2);
   }
+}
 
-  function pauseToggle(){
-    if(!running) return;
-    if(timer){ clearInterval(timer); timer=null; statusEl.textContent='Paused'; }
-    else{ timer=setInterval(tick,MOVE_INTERVAL); statusEl.textContent='Playing'; }
-  }
+window.addEventListener('keydown',(e)=>{
+  const k=e.key;
+  if(!running && k!==' ') return;
+  if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
+  else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
+  else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
+  else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
+  else if(k===' '){ e.preventDefault(); if(running){} }
+});
 
-  function gameOver(){
-    running=false;
-    if(timer){ clearInterval(timer); timer=null; }
-    statusEl.textContent='Game Over';
-    ctx.fillStyle='rgba(255,255,255,0.06)';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-  }
+canvas.addEventListener('click',()=>{ canvas.focus(); });
 
-  function tick(){
-    if((nextDir.x!==-dir.x||nextDir.y!==-dir.y)||snake.length===1) dir=nextDir;
-    const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y, color:snake[0].color};
-    if(snake.some(s=>s.x===head.x && s.y===head.y) && !invincible){ gameOver(); draw(); return; }
-    if(obstacles.some(o=>o.x===head.x && o.y===head.y) && !invincible){ gameOver(); draw(); return; }
+function updatePoints(){ pointsDisplay.textContent='Points: '+points; skinDisplay.textContent='Current Skin: '+currentSkin; }
 
-    // wrap around
-    head.x=(head.x+COLS)%COLS;
-    head.y=(head.y+ROWS)%ROWS;
-
-    snake.unshift(head);
-
-    // moving food
-    if(food.moving){
-      food.x += food.dir;
-      if(food.x<0||food.x>=COLS) food.dir*=-1;
-    }
-
-    if(head.x===food.x && head.y===food.y){
-      if(head.color===food.color){
-        score+=10;
-        snake[0].color=food.color;
-      } else {
-        score=Math.max(0,score-5);
-        snake.pop();
-      }
-      if(Math.random()<0.1){ invincible=true; invTimer=50; }
-      placeFood();
-    } else snake.pop();
-
-    if(invincible){
-      invTimer--;
-      if(invTimer<=0) invincible=false;
-    }
-
-    scoreEl.textContent='Score: '+score;
-    draw();
-  }
-
-  function draw(){
-    ctx.fillStyle='#000';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // obstacles
-    ctx.fillStyle='#555';
-    obstacles.forEach(o=>ctx.fillRect(o.x*CELL_SIZE+2,o.y*CELL_SIZE+2,CELL_SIZE-4,CELL_SIZE-4));
-
-    // food
-    ctx.fillStyle=invincible?'gold':food.color;
-    ctx.fillRect(food.x*CELL_SIZE+2,food.y*CELL_SIZE+2,CELL_SIZE-4,CELL_SIZE-4);
-
-    // snake
-    for(let i=0;i<snake.length;i++){
-      const s=snake[i];
-      const t=i/(snake.length||1);
-      const shade=Math.round(220-t*140);
-      ctx.fillStyle = i===0? '#fff': `rgb(${shade},${shade},${shade})`;
-      ctx.fillRect(s.x*CELL_SIZE+1,s.y*CELL_SIZE+1,CELL_SIZE-2,CELL_SIZE-2);
-    }
-  }
-
-  window.addEventListener('keydown',(e)=>{
-    const k=e.key;
-    if(!running && k!==' ') return;
-    if(k==='ArrowUp'||k==='w'||k==='W') nextDir={x:0,y:-1};
-    else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
-    else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
-    else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
-    else if(k===' '){ e.preventDefault(); pauseToggle(); }
-  });
-
-  canvas.addEventListener('click',()=>{ canvas.focus(); });
-  canvas.setAttribute('tabindex','0');
-  restartBtn.addEventListener('click',startGame);
+startBtn.addEventListener('click',()=>{
+  menu.style.display='none';
   startGame();
+});
+
+casesBtn.addEventListener('click',()=>{
+  if(points<50){ alert("Not enough points! Each case costs 50."); return; }
+  points-=50;
+  updatePoints();
+  const roll=Math.random();
+  let newSkin;
+  if(roll<0.6) newSkin=colors[Math.floor(Math.random()*colors.length)];
+  else if(roll<0.95) newSkin=rareColors[Math.floor(Math.random()*rareColors.length)];
+  else newSkin='gold';
+  ownedSkins.push(newSkin);
+  currentSkin=newSkin;
+  alert("You got a new skin: "+newSkin);
+  updatePoints();
+});
+updatePoints();
+
 })();
 </script>
 </body>
