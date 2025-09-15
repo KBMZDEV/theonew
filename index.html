@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Doom Dungeon Crawler - Sword Combat</title>
+<title>Doom Dungeon Crawler - Sword Combat Fixed</title>
 <style>
   body { margin: 0; overflow: hidden; background: black; }
   canvas { display: block; }
@@ -13,7 +13,6 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
@@ -21,47 +20,44 @@ const tileSize = 64;
 const mapWidth = 20;
 const mapHeight = 15;
 
-// Map generation
-const map = [];
-for (let y = 0; y < mapHeight; y++) {
-  map[y] = [];
-  for (let x = 0; x < mapWidth; x++) map[y][x] = 1;
-}
+// Generate empty map
+const map = Array.from({length: mapHeight},()=>Array(mapWidth).fill(1));
 
 // Random rooms
-function createRoom(w,h){
-  const x = Math.floor(Math.random()*(mapWidth-w-1))+1;
-  const y = Math.floor(Math.random()*(mapHeight-h-1))+1;
+function createRoom(){
+  const w = 3 + Math.floor(Math.random()*4);
+  const h = 3 + Math.floor(Math.random()*4);
+  const x = 1 + Math.floor(Math.random()*(mapWidth-w-1));
+  const y = 1 + Math.floor(Math.random()*(mapHeight-h-1));
   for(let i=y;i<y+h;i++)
     for(let j=x;j<x+w;j++)
       map[i][j]=0;
-  return {x:x+Math.floor(w/2), y:y+Math.floor(h/2)}; // room center
+  return {x:x+Math.floor(w/2), y:y+Math.floor(h/2)};
 }
 
-const roomCenters = [];
-for(let i=0;i<4;i++) roomCenters.push(createRoom(3+Math.floor(Math.random()*4),3+Math.floor(Math.random()*4)));
+// Create 4 rooms
+const rooms = [];
+for(let i=0;i<4;i++) rooms.push(createRoom());
 
-// Connect rooms
+// Connect rooms with corridors
 function createCorridor(a,b){
   let x=a.x, y=a.y;
   while(x!==b.x){ map[y][x]=0; x+=x<b.x?1:-1; }
   while(y!==b.y){ map[y][x]=0; y+=y<b.y?1:-1; }
 }
-for(let i=0;i<roomCenters.length-1;i++) createCorridor(roomCenters[i], roomCenters[i+1]);
+for(let i=0;i<rooms.length-1;i++) createCorridor(rooms[i],rooms[i+1]);
 
 // Player
-let player = {x:roomCenters[0].x*tileSize, y:roomCenters[0].y*tileSize, angle:0, speed:1.2};
+let player = {x:rooms[0].x*tileSize, y:rooms[0].y*tileSize, angle:0, speed:1.2};
+
+// Enemies
+const enemies = [];
+for(let i=1;i<rooms.length;i++) enemies.push({x:rooms[i].x*tileSize, y:rooms[i].y*tileSize, hp:3});
 
 // Controls
 const keys={};
 document.addEventListener('keydown',e=>keys[e.key]=true);
 document.addEventListener('keyup',e=>keys[e.key]=false);
-
-// Enemies
-const enemies = [];
-for(let i=1;i<roomCenters.length;i++){
-  enemies.push({x:roomCenters[i].x*tileSize, y:roomCenters[i].y*tileSize, hp:3});
-}
 
 // Sword
 let swordCooldown=0;
@@ -93,25 +89,22 @@ function movePlayer(){
   if(map[top] && map[top][left]===0){ player.x=newX; player.y=newY; }
 }
 
-// Raycasting for walls
+// Raycasting
 function castRays(){
   const fov=Math.PI*2/3;
   const numRays=300;
   const rayWidth=canvas.width/numRays;
-
   for(let i=0;i<numRays;i++){
     const rayAngle=(player.angle-fov/2)+(i/numRays)*fov;
     let distance=0; let hit=false;
     const sin=Math.sin(rayAngle), cos=Math.cos(rayAngle);
-
     while(!hit && distance<800){
       distance+=1;
       const testX=Math.floor((player.x+cos*distance)/tileSize);
       const testY=Math.floor((player.y+sin*distance)/tileSize);
       if(map[testY] && map[testY][testX]===1) hit=true;
     }
-
-    let shade=255-Math.min(distance*0.5,200);
+    const shade=255-Math.min(distance*0.5,200);
     ctx.fillStyle=`rgb(${shade},${shade},${shade})`;
     const wallHeight=(tileSize*300)/distance;
     ctx.fillRect(i*rayWidth,(canvas.height/2)-wallHeight/2,rayWidth+1,wallHeight);
@@ -120,7 +113,6 @@ function castRays(){
 
 // Draw enemies and sword
 function drawOverlay(){
-  // Enemies visible through raycasting
   enemies.forEach(enemy=>{
     if(enemy.hp<=0) return;
     const dx=enemy.x-player.x;
@@ -130,27 +122,26 @@ function drawOverlay(){
     let diff=angleToEnemy-player.angle;
     diff=Math.atan2(Math.sin(diff),Math.cos(diff));
 
-    if(Math.abs(diff)<Math.PI/6 && dist>0){
-      // Raycast check for walls
-      let blocked=false;
-      const steps=Math.floor(dist);
-      for(let s=0;s<steps;s+=5){
-        const testX=Math.floor((player.x+Math.cos(player.angle)*s)/tileSize);
-        const testY=Math.floor((player.y+Math.sin(player.angle)*s)/tileSize);
-        if(map[testY] && map[testY][testX]===1){ blocked=true; break; }
-      }
-      if(!blocked){
-        const size=(tileSize*300)/dist; // size proportional
-        const screenX=(canvas.width/2)+(diff/(Math.PI/3))*(canvas.width/2);
-        ctx.fillStyle='red';
-        ctx.fillRect(screenX-size/4,(canvas.height/2)-size/2,size/2,size); // smaller enemy
-      }
+    // Check line-of-sight
+    let visible=true;
+    const steps=Math.floor(dist);
+    for(let s=0;s<steps;s+=5){
+      const testX=Math.floor((player.x+Math.cos(player.angle)*s)/tileSize);
+      const testY=Math.floor((player.y+Math.sin(player.angle)*s)/tileSize);
+      if(map[testY] && map[testY][testX]===1){ visible=false; break; }
+    }
+
+    if(visible && Math.abs(diff)<Math.PI/6){
+      const size=(tileSize*300)/dist*0.4; // smaller enemy
+      const screenX=(canvas.width/2)+(diff/(Math.PI/3))*(canvas.width/2);
+      ctx.fillStyle='red';
+      ctx.fillRect(screenX-size/2,(canvas.height/2)-size/2,size,size);
     }
   });
 
   // Sword swing
-  if(swordCooldown>10){
-    const swingProgress=(20-swordCooldown)/10; // 0 to 1
+  if(swordCooldown>0){
+    const swingProgress=(20-swordCooldown)/10; // 0-1
     const swordLength=120;
     const swordWidth=20;
     const angleOffset=(Math.PI/4)*(1-swingProgress);
