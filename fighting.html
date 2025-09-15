@@ -3,155 +3,111 @@ document.write(`
 <html>
 <head>
 <meta charset="utf-8">
-<title>Fighting Game — Chromebook</title>
+<title>Color-Chaser Snake</title>
 <style>
-  html, body { margin:0; padding:0; height:100%; background:#111; color:#fff; font-family:Arial,sans-serif; overflow:hidden; }
-  canvas { display:block; margin:0 auto; background:#222; border:4px solid #555; }
-  .info { text-align:center; margin-top:4px; font-size:14px; }
+  html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center}
+  canvas{background:#111;border:2px solid #fff;border-radius:8px;display:block}
+  #scoreboard{position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:18px;opacity:0.9}
 </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="800" height="400" tabindex="0"></canvas>
-<div class="info">Player 1: Arrows + Enter | Player 2: WASD + Space</div>
-
+<div id="scoreboard">Score: 0</div>
+<canvas id="game" width="400" height="400"></canvas>
 <script>
 (() => {
-  const canvas = document.getElementById('gameCanvas');
+  const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('scoreboard');
+  const CELL = 20;
+  const COLS = canvas.width / CELL;
+  const ROWS = canvas.height / CELL;
+  const COLORS = ['red','green','blue','yellow','cyan','magenta'];
+  let snake = [{x:10,y:10,color:'red'}];
+  let dir = {x:1,y:0};
+  let nextDir = dir;
+  let food = {x:5,y:5,color:COLORS[Math.floor(Math.random()*COLORS.length)]};
+  let score = 0;
+  let invincible = false;
+  let invTimer = 0;
 
-  const G = 0.6; // gravity
-  const FRICTION = 0.85;
-  const FLOOR = 350;
-  const WIDTH = canvas.width;
-  const HEIGHT = canvas.height;
-
-  class Fighter {
-    constructor(x, color, keys) {
-      this.x = x;
-      this.y = FLOOR;
-      this.w = 40;
-      this.h = 80;
-      this.color = color;
-      this.vx = 0;
-      this.vy = 0;
-      this.onGround = true;
-      this.hp = 100;
-      this.keys = keys;
-      this.attackCooldown = 0;
-      this.attackBox = {x:0, y:0, w:0, h:0, active:false};
-    }
-    move(keyState) {
-      // horizontal movement
-      if(keyState[this.keys.left]) this.vx = -5;
-      else if(keyState[this.keys.right]) this.vx = 5;
-      else this.vx *= FRICTION;
-
-      // jump
-      if(keyState[this.keys.jump] && this.onGround){
-        this.vy = -12;
-        this.onGround = false;
-      }
-
-      // attack
-      if(keyState[this.keys.attack] && this.attackCooldown <= 0){
-        this.attackCooldown = 30;
-        this.attackBox.active = true;
-        this.attackBox.w = 30;
-        this.attackBox.h = 20;
-        this.attackBox.y = this.y - this.h/2;
-        this.attackBox.x = (this.color==='red') ? this.x+this.w : this.x-30;
-      }
-    }
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
-      if(!this.onGround) this.vy += G;
-
-      // floor collision
-      if(this.y >= FLOOR){
-        this.y = FLOOR;
-        this.vy = 0;
-        this.onGround = true;
-      }
-
-      // bounds
-      this.x = Math.max(0, Math.min(WIDTH - this.w, this.x));
-
-      // cooldown
-      if(this.attackCooldown > 0) this.attackCooldown--;
-      if(this.attackCooldown === 0) this.attackBox.active = false;
-    }
-    draw() {
-      // fighter
-      ctx.fillStyle = this.color;
-      ctx.fillRect(this.x, this.y - this.h, this.w, this.h);
-      // attack
-      if(this.attackBox.active){
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(this.attackBox.x, this.attackBox.y, this.attackBox.w, this.attackBox.h);
-      }
-    }
+  function randPos(){
+    return {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)};
   }
 
-  const keys = {};
-  const player1 = new Fighter(100, 'red', {left:'ArrowLeft', right:'ArrowRight', jump:'ArrowUp', attack:'Enter'});
-  const player2 = new Fighter(600, 'blue', {left:'a', right:'d', jump:'w', attack:' '});
-  const fighters = [player1, player2];
-
-  function rectCollision(a,b){
-    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  function placeFood(){
+    let p;
+    do { p = randPos(); } while(snake.some(s=>s.x===p.x && s.y===p.y));
+    food = {...p, color: COLORS[Math.floor(Math.random()*COLORS.length)]};
   }
 
-  function update() {
-    fighters.forEach(f => f.move(keys));
-    fighters.forEach(f => f.update());
+  function tick(){
+    dir = nextDir;
+    const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y, color: snake[0].color};
 
-    // handle attacks
-    if(player1.attackBox.active && rectCollision(player1.attackBox, player2)){
-      player2.hp -= 1;
-      player2.vx += 3; // knockback
-    }
-    if(player2.attackBox.active && rectCollision(player2.attackBox, player1)){
-      player1.hp -= 1;
-      player1.vx -= 3;
-    }
+    // wrap-around
+    head.x = (head.x + COLS) % COLS;
+    head.y = (head.y + ROWS) % ROWS;
 
-    // check round end
-    fighters.forEach(f => {
-      if(f.hp <= 0){
-        f.hp = 100;
-        player1.x = 100;
-        player2.x = 600;
+    // self-collision
+    if(!invincible && snake.some(s=>s.x===head.x && s.y===head.y)){ snake = [{x:10,y:10,color:'red'}]; score=0; invincible=false; }
+
+    snake.unshift(head);
+
+    // food logic
+    if(head.x===food.x && head.y===food.y){
+      if(head.color === food.color){
+        score += 10;
+        // change snake head color to food color
+        snake[0].color = food.color;
+      } else {
+        score = Math.max(0, score-5);
+        snake.pop();
       }
+      // 10% chance golden food
+      if(Math.random()<0.1){
+        invincible = true;
+        invTimer = 50;
+      }
+      placeFood();
+    } else snake.pop();
+
+    if(invincible){
+      invTimer--;
+      if(invTimer<=0) invincible=false;
+    }
+
+    scoreEl.textContent = 'Score: '+score;
+  }
+
+  function draw(){
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // draw food
+    ctx.fillStyle = invincible ? 'gold':'#'+food.color; 
+    ctx.fillRect(food.x*CELL,food.y*CELL,CELL,CELL);
+    
+    // draw snake
+    snake.forEach((s,i)=>{
+      let grad = ctx.createLinearGradient(s.x*CELL,s.y*CELL,(s.x+1)*CELL,(s.y+1)*CELL);
+      grad.addColorStop(0,s.color);
+      grad.addColorStop(1,'white');
+      ctx.fillStyle = grad;
+      ctx.fillRect(s.x*CELL,s.y*CELL,CELL,CELL);
     });
   }
 
-  function draw() {
-    ctx.clearRect(0,0,WIDTH,HEIGHT);
-    // floor
-    ctx.fillStyle = '#444';
-    ctx.fillRect(0,FLOOR,WIDTH, HEIGHT-FLOOR);
-    // health bars
-    ctx.fillStyle = 'red';
-    ctx.fillRect(20,20, player1.hp*2, 20);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(20,20,200,20);
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(WIDTH-220,20, player2.hp*2, 20);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(WIDTH-220,20,200,20);
+  window.addEventListener('keydown', e=>{
+    if(e.key==='ArrowUp' && dir.y!==1) nextDir={x:0,y:-1};
+    if(e.key==='ArrowDown' && dir.y!==-1) nextDir={x:0,y:1};
+    if(e.key==='ArrowLeft' && dir.x!==1) nextDir={x:-1,y:0};
+    if(e.key==='ArrowRight' && dir.x!==-1) nextDir={x:1,y:0};
+  });
 
-    fighters.forEach(f => f.draw());
-  }
-
-  function loop() {
-    update();
+  function loop(){
+    tick();
     draw();
-    requestAnimationFrame(loop);
+    setTimeout(loop,120);
   }
-
-  window.addEventListener('keydown', e => keys[e.key] = true);
-  window.addEventListener('keyup', e => keys[e.key] = false);
 
   loop();
 })();
