@@ -19,6 +19,7 @@ document.write(`
   .small{font-size:12px;opacity:0.85}
   .center{display:flex;flex-direction:column;align-items:center;gap:6px}
   .toprow{display:flex;gap:12px;align-items:center;justify-content:center;width:760px}
+  .cardbtn.selected{outline:2px solid rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.6) inset}
 </style>
 </head>
 <body>
@@ -99,7 +100,7 @@ document.write(`
 
   function makeTroop(side, x, y, def) {
     return {
-      id: 'u'+Math.random().toString(36).slice(2,8),
+      id: 'u' + Math.random().toString(36).slice(2,8),
       type:'troop', side, x, y, w:18, h:24,
       hp: def.hp, maxHp:def.hp, dmg:def.dmg, range:def.range, spd:def.spd, color:def.color,
       target: null, state:'advance', attackCooldown:0
@@ -109,16 +110,17 @@ document.write(`
   // UI: card buttons
   function renderCardUI() {
     cardsEl.innerHTML = '';
-    CARD_DEFS.forEach(def=>{
+    CARD_DEFS.forEach(function(def){
       const btn = document.createElement('div');
       btn.className = 'cardbtn';
-      btn.innerHTML = \`<div style="font-weight:700">\${def.name}</div><div class="small">\${def.cost} Elixir • \${def.desc}</div>\`;
-      btn.onclick = () => {
+      // use string concatenation to avoid nested template literals
+      btn.innerHTML = '<div style="font-weight:700">' + def.name + '</div><div class="small">' + def.cost + ' Elixir • ' + def.desc + '</div>';
+      btn.onclick = function() {
         if (gameOver) return;
         if (elixir >= def.cost) {
           selectedCard = def;
           // highlight visually
-          Array.from(cardsEl.children).forEach(c => c.classList.remove('selected'));
+          Array.from(cardsEl.children).forEach(function(c){ c.classList.remove('selected'); });
           btn.classList.add('selected');
         }
       };
@@ -145,13 +147,11 @@ document.write(`
     ctx.moveTo(0,LANES_Y[0]); ctx.lineTo(W,LANES_Y[0]);
     ctx.moveTo(0,LANES_Y[1]); ctx.lineTo(W,LANES_Y[1]);
     ctx.stroke();
-
-    // towers and entities drawn elsewhere
   }
 
   function drawEntities() {
     // towers
-    entities.filter(e=>e.type==='tower').forEach(t=>{
+    entities.filter(function(e){ return e.type==='tower'; }).forEach(function(t){
       ctx.fillStyle = t.side==='player' ? '#2b9d76' : '#ff6b6b';
       ctx.fillRect(t.x - t.w/2, t.y - t.h/2, t.w, t.h);
       // hp bar
@@ -174,7 +174,7 @@ document.write(`
     });
 
     // troops
-    entities.filter(e=>e.type==='troop').forEach(u=>{
+    entities.filter(function(e){ return e.type==='troop'; }).forEach(function(u){
       ctx.fillStyle = u.color;
       ctx.fillRect(u.x - u.w/2, u.y - u.h/2, u.w, u.h);
       // hp bar
@@ -189,10 +189,9 @@ document.write(`
 
   // find nearest enemy target in front (units or towers)
   function findTarget(unit) {
-    const enemies = entities.filter(e => e.side !== unit.side);
-    // prefer closest in x distance within some vertical tolerance
+    const enemies = entities.filter(function(e){ return e.side !== unit.side; });
     let best = null; let bestDist = 1e9;
-    enemies.forEach(e=>{
+    enemies.forEach(function(e){
       const dy = Math.abs(e.y - unit.y);
       if (dy > 40) return;
       const dx = Math.abs(e.x - unit.x);
@@ -209,7 +208,6 @@ document.write(`
     if (aiTimer <= 0) {
       const def = CARD_DEFS[Math.floor(Math.random()*CARD_DEFS.length)];
       if (elixir >= def.cost) {
-        // place near its towers on a random lane
         const lane = Math.random() < 0.5 ? LANES_Y[0] : LANES_Y[1];
         const x = W - 180 + Math.random()*60;
         entities.push(makeTroop('enemy', x, lane, def));
@@ -222,43 +220,36 @@ document.write(`
   function update(dt) {
     if (gameOver) return;
     // elixir regen
-    elixir = Math.min(MAX_ELIXIR, elixir + dt*0.0015); // ~1 elixir per 0.67s => tuned
+    elixir = Math.min(MAX_ELIXIR, elixir + dt*0.0015);
     elFill.style.width = (elixir / MAX_ELIXIR * 100) + '%';
 
     // AI
     aiThink(dt);
 
     // update troops
-    const troops = entities.filter(e=>e.type==='troop');
-    for (let u of troops) {
-      // find target if none
+    const troops = entities.filter(function(e){ return e.type==='troop'; });
+    for (let i=0;i<troops.length;i++) {
+      const u = troops[i];
       if (!u.target || u.target.hp <= 0 || u.target.side === u.side) {
         u.target = findTarget(u);
       }
-      // if has target, move toward or attack if in range
       if (u.target) {
         const dx = u.target.x - u.x;
         const dy = u.target.y - u.y;
         const dist = Math.hypot(dx,dy);
         if (dist <= u.range) {
-          // attack (cooldown)
-          u.attackCooldown -= dt;
+          u.attackCooldown = (u.attackCooldown || 0) - dt;
           if (u.attackCooldown <= 0) {
-            u.attackCooldown = 600; // ms between attacks
+            u.attackCooldown = 600;
             u.target.hp -= u.dmg;
-            // small knockback
-            u.target.x += Math.sign(dx) * 6 * 0.5;
-            // remove target if dead will be handled below
+            u.target.x += Math.sign(dx) * 3;
           }
         } else {
-          // move toward target
-          const nx = dx/dist || 0;
+          const nx = dist ? dx/dist : 0;
           u.x += nx * u.spd * dt*0.06;
-          // slight y smoothing
           u.y += (u.target.y - u.y)*0.08;
         }
       } else {
-        // no target: advance toward enemy side (center path)
         const dir = u.side==='player' ? 1 : -1;
         u.x += dir * u.spd * dt*0.06;
       }
@@ -269,7 +260,6 @@ document.write(`
       const e = entities[i];
       if (e.type==='troop' && e.hp <= 0) entities.splice(i,1);
       if (e.type==='tower' && e.hp <= 0) {
-        // tower destroyed - if king tower, game over immediate
         if (e.king) {
           gameOver = true;
           statusEl.textContent = (e.side==='enemy') ? 'You Win!' : 'You Lose!';
@@ -279,7 +269,7 @@ document.write(`
     }
 
     // clamp troops inside bounds
-    entities.filter(e=>e.type==='troop').forEach(u=>{
+    entities.filter(function(e){ return e.type==='troop'; }).forEach(function(u){
       u.x = Math.max(20, Math.min(W-20, u.x));
       u.y = Math.max(40, Math.min(H-40, u.y));
     });
@@ -291,9 +281,8 @@ document.write(`
     const ss = String(remain%60).padStart(2,'0');
     timerEl.textContent = mm + ':' + ss;
     if (remain <= 0 && !gameOver) {
-      // decide winner by total tower HP remaining (simple)
-      const playerHp = entities.filter(e=>e.type==='tower' && e.side==='player').reduce((s,t)=>s+t.hp,0);
-      const enemyHp = entities.filter(e=>e.type==='tower' && e.side==='enemy').reduce((s,t)=>s+t.hp,0);
+      const playerHp = entities.filter(function(e){ return e.type==='tower' && e.side==='player'; }).reduce(function(s,t){ return s + t.hp; },0);
+      const enemyHp = entities.filter(function(e){ return e.type==='tower' && e.side==='enemy'; }).reduce(function(s,t){ return s + t.hp; },0);
       gameOver = true;
       if (playerHp > enemyHp) statusEl.textContent = 'Time Up — You Win!';
       else if (enemyHp > playerHp) statusEl.textContent = 'Time Up — You Lose!';
@@ -321,37 +310,32 @@ document.write(`
   }
 
   // click to deploy
-  canvas.addEventListener('click', (ev) => {
+  canvas.addEventListener('click', function(ev) {
     if (gameOver) return;
     const rect = canvas.getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const y = ev.clientY - rect.top;
     if (!selectedCard) return;
-    // must deploy on player's half (left half)
     if (x > W/2) {
-      // show small flash
       statusEl.textContent = 'Deploy on your side!';
-      setTimeout(()=>statusEl.textContent = 'Playing', 700);
+      setTimeout(function(){ statusEl.textContent = 'Playing'; }, 700);
       return;
     }
-    // spend elixir
     if (elixir < selectedCard.cost) {
       statusEl.textContent = 'Not enough elixir';
-      setTimeout(()=>statusEl.textContent = 'Playing', 700);
+      setTimeout(function(){ statusEl.textContent = 'Playing'; }, 700);
       return;
     }
     elixir -= selectedCard.cost;
-    // pick lane nearest
     const lane = (Math.abs(y - LANES_Y[0]) < Math.abs(y - LANES_Y[1])) ? LANES_Y[0] : LANES_Y[1];
     const spawnX = Math.min(W/2 - 60, Math.max(40, x));
     entities.push(makeTroop('player', spawnX, lane, selectedCard));
     selectedCard = null;
-    // clear UI highlight
-    Array.from(cardsEl.children).forEach(c => c.classList.remove('selected'));
+    Array.from(cardsEl.children).forEach(function(c){ c.classList.remove('selected'); });
   });
 
   // keyboard support: 1/2/3 select card
-  window.addEventListener('keydown', e=>{
+  window.addEventListener('keydown', function(e){
     if (gameOver && e.key === 'r') restart();
     if (e.key === '1') selectByIndex(0);
     if (e.key === '2') selectByIndex(1);
@@ -364,9 +348,9 @@ document.write(`
     if (elixir >= def.cost) selectedCard = def;
     else {
       statusEl.textContent = 'Not enough elixir';
-      setTimeout(()=>statusEl.textContent = 'Playing',700);
+      setTimeout(function(){ statusEl.textContent = 'Playing'; },700);
     }
-    Array.from(cardsEl.children).forEach((c,idx) => idx===i ? c.classList.add('selected') : c.classList.remove('selected'));
+    Array.from(cardsEl.children).forEach(function(c,idx){ if (idx===i) c.classList.add('selected'); else c.classList.remove('selected'); });
   }
 
   // restart
@@ -386,7 +370,7 @@ document.write(`
   renderCardUI();
   requestAnimationFrame(loop);
 
-  // expose restart via status click for convenience
+  // expose restart via timer click for convenience
   timerEl.addEventListener('click', restart);
 })();
 </script>
