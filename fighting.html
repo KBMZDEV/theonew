@@ -81,8 +81,6 @@ function gameOver(){
   ctx.fillStyle='rgba(255,255,255,0.1)';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   menu.style.display='flex';
-  points += score; 
-  updatePoints();
 }
 
 function tick(){
@@ -112,13 +110,15 @@ function tick(){
   if(food.moving){ food.x+=food.dir; if(food.x<0||food.x>=COLS) food.dir*=-1; }
 
   if(head.x===food.x && head.y===food.y){
+    // always gain points when eating
+    points += 10;
+
     if(head.color===food.color){
-      score += 10; 
-      points += 10;
+      score += 10;
       snake[0].color = food.color;
     } else { 
       score = Math.max(0,score-5); 
-      points = Math.max(0,points-5);
+      points = Math.max(0,points-5); // lose points on wrong food
       snake.pop(); 
     }
     if(Math.random() < 0.1){ invincible = true; invTimer = 50; }
@@ -162,7 +162,6 @@ window.addEventListener('keydown',(e)=>{
   else if(k==='ArrowDown'||k==='s'||k==='S') nextDir={x:0,y:1};
   else if(k==='ArrowLeft'||k==='a'||k==='A') nextDir={x:-1,y:0};
   else if(k==='ArrowRight'||k==='d'||k==='D') nextDir={x:1,y:0};
-  else if(k===' '){ e.preventDefault(); if(running){} }
 });
 
 canvas.addEventListener('click',()=>{ canvas.focus(); });
@@ -178,7 +177,7 @@ startBtn.addEventListener('click',()=>{
 
 casesBtn.addEventListener('click',()=>{
   if(points<5){ alert("Not enough points! Each case costs 5."); return; }
-  points-=5;
+  points -= 5;
   updatePoints();
   const roll=Math.random();
   let newSkin;
