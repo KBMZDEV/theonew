@@ -3,40 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mini Minecraft/Terraria</title>
+<title>Mini Minecraft/Terraria with Camera</title>
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: linear-gradient(#87CEEB, #228B22);
-    font-family: sans-serif;
-  }
-  canvas {
-    display: block;
-    background: #87CEEB;
-  }
-  #inventory {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    display: flex;
-    gap: 5px;
-  }
-  .slot {
-    width: 40px;
-    height: 40px;
-    border: 2px solid white;
-    background: rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    color: white;
-    cursor: pointer;
-  }
-  .selected {
-    border-color: yellow;
-  }
+  body { margin: 0; overflow: hidden; background: linear-gradient(#87CEEB, #228B22); font-family: sans-serif; }
+  canvas { display: block; background: #87CEEB; }
+  #inventory { position: absolute; bottom: 10px; left: 10px; display: flex; gap: 5px; }
+  .slot { width: 40px; height: 40px; border: 2px solid white; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer; }
+  .selected { border-color: yellow; }
 </style>
 </head>
 <body>
@@ -50,40 +23,28 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 const tileSize = 40;
-const worldWidth = 50;
+const worldWidth = 100;
 const worldHeight = 15;
 
 const blockTypes = ['dirt','stone','grass'];
-const blockColors = {
-  'dirt':'#8B4513',
-  'stone':'#808080',
-  'grass':'#228B22'
-};
+const blockColors = { dirt:'#8B4513', stone:'#808080', grass:'#228B22' };
 
-// Terrain generation
+// Terrain generation (simple)
 const world = [];
 for(let y=0;y<worldHeight;y++){
   world[y]=[];
   for(let x=0;x<worldWidth;x++){
-    if(y === worldHeight-1) world[y][x]='grass';
-    else if(y>worldHeight-4) world[y][x]='dirt';
+    if(y===0) world[y][x]='grass';
+    else if(y<3) world[y][x]='dirt';
     else world[y][x]='stone';
   }
 }
 
 // Player
-const player = {
-  x: 100,
-  y: canvas.height - tileSize*3,
-  width: tileSize,
-  height: tileSize*2,
-  color:'red',
-  vx:0,
-  vy:0,
-  speed:5,
-  jumpPower:15,
-  onGround:false
-};
+const player = { x:200, y:100, width:tileSize, height:tileSize*2, color:'red', vx:0, vy:0, speed:5, jumpPower:15, onGround:false };
+
+// Camera
+const camera = { x:0, y:0, width:canvas.width, height:canvas.height };
 
 // Inventory
 let inventory = {};
@@ -110,46 +71,43 @@ document.addEventListener('keyup', e=>keys[e.key]=false);
 
 // Mouse interaction
 canvas.addEventListener('mousedown', e=>{
-  const x = Math.floor(e.clientX/tileSize);
-  const y = Math.floor(e.clientY/tileSize);
-  if(e.button===0){ // left click = mine
-    const block = world[y]?.[x];
+  const mx = e.clientX + camera.x;
+  const my = canvas.height - e.clientY + camera.y; // flip Y for world coords
+  const tileX = Math.floor(mx / tileSize);
+  const tileY = Math.floor(my / tileSize);
+  if(e.button===0){ // mine
+    const block = world[tileY]?.[tileX];
     if(block){
-      // Add to inventory
       const slotIndex = Object.keys(inventory).length<inventorySize ? Object.keys(inventory).length : selectedSlot;
       inventory[slotIndex] = block;
-      world[y][x]=null;
+      world[tileY][tileX]=null;
       updateInventory();
     }
-  } else if(e.button===2){ // right click = place
+  } else if(e.button===2){ // place
     const block = inventory[selectedSlot];
-    if(block && world[y]?.[x]===null){
-      world[y][x]=block;
+    if(block && world[tileY]?.[tileX]===null){
+      world[tileY][tileX]=block;
       inventory[selectedSlot]=null;
       updateInventory();
     }
   }
 });
-canvas.oncontextmenu = e=>e.preventDefault(); // prevent context menu
+canvas.oncontextmenu = e=>e.preventDefault();
 
 // Game loop
 function update(){
   // Movement
   player.vx = 0;
-  if(keys['a']) player.vx = -player.speed;
-  if(keys['d']) player.vx = player.speed;
-  if(keys['w'] && player.onGround){
-    player.vy = -player.jumpPower;
-    player.onGround=false;
-  }
+  if(keys['a']) player.vx=-player.speed;
+  if(keys['d']) player.vx=player.speed;
+  if(keys['w'] && player.onGround){ player.vy = player.jumpPower; player.onGround=false; }
 
   // Gravity
-  player.vy += 0.8;
+  player.vy -= 0.8; // downward is negative
   player.x += player.vx;
   player.y += player.vy;
 
-  // Simple collision with ground blocks
-  const playerBottom = player.y+player.height;
+  // Collision
   player.onGround=false;
   for(let y=0;y<worldHeight;y++){
     for(let x=0;x<worldWidth;x++){
@@ -158,20 +116,23 @@ function update(){
         const bx = x*tileSize;
         const by = y*tileSize;
         if(player.x+player.width>bx && player.x<bx+tileSize &&
-           playerBottom>by && player.y<by+tileSize){
-          // Collision detected
-          if(player.vy>0){
+           player.y<by+tileSize && player.y+player.height>by){
+          if(player.vy<0){ // falling
+            player.y = by + tileSize;
+            player.vy=0;
+          } else if(player.vy>0){ // jumping up
             player.y = by - player.height;
             player.vy=0;
             player.onGround=true;
-          } else if(player.vy<0){
-            player.y = by+tileSize;
-            player.vy=0;
           }
         }
       }
     }
   }
+
+  // Camera follows player
+  camera.x = player.x - canvas.width/2 + player.width/2;
+  camera.y = player.y - canvas.height/2 + player.height/2;
 
   draw();
   requestAnimationFrame(update);
@@ -180,23 +141,25 @@ function update(){
 // Draw function
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
   // Draw world
   for(let y=0;y<worldHeight;y++){
     for(let x=0;x<worldWidth;x++){
       const block = world[y][x];
       if(block){
+        const drawX = x*tileSize - camera.x;
+        const drawY = canvas.height - ((y+1)*tileSize) + camera.y; // flip Y
         ctx.fillStyle = blockColors[block];
-        ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
+        ctx.fillRect(drawX, drawY, tileSize, tileSize);
         ctx.strokeStyle='black';
-        ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize);
+        ctx.strokeRect(drawX, drawY, tileSize, tileSize);
       }
     }
   }
-
   // Draw player
+  const px = player.x - camera.x;
+  const py = canvas.height - (player.y + player.height) + camera.y;
   ctx.fillStyle = player.color;
-  ctx.fillRect(player.x, player.y, player.width, player.height);
+  ctx.fillRect(px, py, player.width, player.height);
 }
 
 update();
