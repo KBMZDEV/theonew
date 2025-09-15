@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Doom-like Game</title>
+<title>Doom-style Dungeon Crawler</title>
 <style>
   body { margin: 0; overflow: hidden; background: black; }
   canvas { display: block; }
@@ -17,48 +17,85 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const mapWidth = 8;
-const mapHeight = 6;
 const tileSize = 64;
+const mapWidth = 20;
+const mapHeight = 15;
 
-// Generate random map (1 = wall, 0 = empty)
+// Simple dungeon generator: rooms connected by corridors
 const map = [];
 for (let y = 0; y < mapHeight; y++) {
   map[y] = [];
-  for (let x = 0; x < mapWidth; x++) {
-    if (y === 0 || y === mapHeight-1 || x === 0 || x === mapWidth-1) {
-      map[y][x] = 1; // borders
-    } else {
-      map[y][x] = Math.random() < 0.3 ? 1 : 0; // random walls
+  for (let x = 0; x < mapWidth; x++) map[y][x] = 1; // start all walls
+}
+
+// Create a few rooms
+function createRoom(x, y, w, h) {
+  for (let i = y; i < y + h; i++) {
+    for (let j = x; j < x + w; j++) {
+      if (i > 0 && i < mapHeight && j > 0 && j < mapWidth) map[i][j] = 0;
     }
   }
 }
 
+// Make 3-4 rooms
+createRoom(1, 1, 6, 5);
+createRoom(10, 2, 5, 6);
+createRoom(5, 9, 8, 4);
+
+// Connect rooms with corridors
+function createCorridor(x1, y1, x2, y2) {
+  while (x1 !== x2) {
+    map[y1][x1] = 0;
+    x1 += x1 < x2 ? 1 : -1;
+  }
+  while (y1 !== y2) {
+    map[y1][x1] = 0;
+    y1 += y1 < y2 ? 1 : -1;
+  }
+}
+
+createCorridor(3, 3, 12, 4);
+createCorridor(12, 4, 7, 10);
+
 let player = {
-  x: tileSize * 1.5,
-  y: tileSize * 1.5,
+  x: tileSize * 2,
+  y: tileSize * 2,
   angle: 0,
-  speed: 0.8 // slower speed
+  speed: 1.2
 };
 
 const keys = {};
 document.addEventListener('keydown', e => keys[e.key] = true);
 document.addEventListener('keyup', e => keys[e.key] = false);
 
+function movePlayer() {
+  let newX = player.x;
+  let newY = player.y;
+
+  if (keys['ArrowUp']) { newX += Math.cos(player.angle) * player.speed; newY += Math.sin(player.angle) * player.speed; }
+  if (keys['ArrowDown']) { newX -= Math.cos(player.angle) * player.speed; newY -= Math.sin(player.angle) * player.speed; }
+  if (keys['ArrowLeft']) player.angle -= 0.04;
+  if (keys['ArrowRight']) player.angle += 0.04;
+
+  // Collision
+  const left = Math.floor(newX / tileSize);
+  const top = Math.floor(newY / tileSize);
+  if (map[top] && map[top][left] === 0) { player.x = newX; player.y = newY; }
+}
+
 function castRays() {
-  const fov = Math.PI * 2 / 3; // 120 degrees FOV
-  const numRays = 300; 
+  const fov = Math.PI * 2 / 3;
+  const numRays = 300;
   const rayWidth = canvas.width / numRays;
 
   for (let i = 0; i < numRays; i++) {
-    const rayAngle = (player.angle - fov/2) + (i / numRays) * fov;
+    const rayAngle = (player.angle - fov / 2) + (i / numRays) * fov;
     let distance = 0;
     let hit = false;
-
     const sin = Math.sin(rayAngle);
     const cos = Math.cos(rayAngle);
 
-    while (!hit && distance < 500) {
+    while (!hit && distance < 800) {
       distance += 1;
       const testX = Math.floor((player.x + cos * distance) / tileSize);
       const testY = Math.floor((player.y + sin * distance) / tileSize);
@@ -70,37 +107,14 @@ function castRays() {
     ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
 
     const wallHeight = (tileSize * 300) / distance;
-    ctx.fillRect(i * rayWidth, (canvas.height / 2) - wallHeight/2, rayWidth + 1, wallHeight);
+    ctx.fillRect(i * rayWidth, (canvas.height / 2) - wallHeight / 2, rayWidth + 1, wallHeight);
   }
-}
-
-function movePlayer() {
-  if (keys['ArrowUp']) {
-    const newX = player.x + Math.cos(player.angle) * player.speed;
-    const newY = player.y + Math.sin(player.angle) * player.speed;
-    if (!map[Math.floor(newY / tileSize)][Math.floor(newX / tileSize)]) {
-      player.x = newX;
-      player.y = newY;
-    }
-  }
-  if (keys['ArrowDown']) {
-    const newX = player.x - Math.cos(player.angle) * player.speed;
-    const newY = player.y - Math.sin(player.angle) * player.speed;
-    if (!map[Math.floor(newY / tileSize)][Math.floor(newX / tileSize)]) {
-      player.x = newX;
-      player.y = newY;
-    }
-  }
-  if (keys['ArrowLeft']) player.angle -= 0.03;
-  if (keys['ArrowRight']) player.angle += 0.03;
 }
 
 function gameLoop() {
-  // Draw ceiling and floor
-  ctx.fillStyle = 'rgb(70,70,70)'; // ceiling
-  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-  ctx.fillStyle = 'rgb(50,50,50)'; // floor
-  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+  // Floor and ceiling
+  ctx.fillStyle = 'rgb(70,70,70)'; ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
+  ctx.fillStyle = 'rgb(50,50,50)'; ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
 
   movePlayer();
   castRays();
