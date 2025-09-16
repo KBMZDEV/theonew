@@ -21,7 +21,7 @@
 
 <div class="menu" id="menu">
   <button id="startBtn">Start Game</button>
-  <button id="casesBtn">Open Case (5 points)</button>
+  <button id="casesBtn">Open Case (50 points)</button>
   <div class="points" id="pointsDisplay">Points: 0</div>
   <label for="skinSelect" class="points">Select Skin:</label>
   <select id="skinSelect"></select>
@@ -143,7 +143,7 @@ function tick(){
   snake.unshift(head);
 
   if(head.x===food.x && head.y===food.y){
-    points += 10;
+    points += 5;
     if(head.color===food.color){ head.color=food.color; }
     placeFood(); updatePoints();
   } else snake.pop();
@@ -185,8 +185,8 @@ function updatePoints(){
 
 // --- Case animation ---
 casesBtn.addEventListener('click',()=>{
-  if(points<5){ alert("Not enough points!"); return; }
-  points -=5; updatePoints();
+  if(points<50){ alert("Not enough points!"); return; }
+  points -=50; updatePoints();
 
   const roll = Math.random();
   let finalSkin;
